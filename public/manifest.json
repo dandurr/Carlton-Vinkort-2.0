@@ -1,0 +1,15 @@
+{
+  "name": "Carlton Vinkort",
+  "short_name": "Vinkort",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#991b1b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/apple-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
