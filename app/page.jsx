@@ -169,7 +169,7 @@ export default function VinkortClient() {
       setTimeout(() => setShowThanks(false), 3000);
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-pulse text-gray-400 font-serif text-2xl">Henter Carlton's Vinkælder...</div></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-pulse text-gray-400 font-serif text-2xl">Henter Carlton&apos;s Vinkælder...</div></div>;
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-gray-800 font-sans pb-20 relative">
