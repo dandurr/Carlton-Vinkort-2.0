@@ -64,7 +64,7 @@ export default function VinkortClient() {
   const [selectedWine, setSelectedWine] = useState(null); 
   const [showBackToTop, setShowBackToTop] = useState(false);
   
-  // GENSKABT: Avancerede filtre & Feedback
+  // Avancerede filtre & Feedback
   const [showFilters, setShowFilters] = useState(false);
   const [filterValues, setFilterValues] = useState({ country: 'all', region: 'all', producer: 'all', price: 'all' });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -94,7 +94,7 @@ export default function VinkortClient() {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // GENSKABT: Dropdown Data lister
+  // Dropdown Data lister
   const uniqueCountries = useMemo(() => Array.from(new Set(wines.map(w => w.country).filter(Boolean))).sort(), [wines]);
   const uniqueProducers = useMemo(() => Array.from(new Set(wines.map(w => w.producer).filter(Boolean))).sort(), [wines]);
   const uniqueRegions = useMemo(() => {
@@ -102,7 +102,7 @@ export default function VinkortClient() {
     return Array.from(new Set(wines.filter(w => w.country === filterValues.country).map(w => w.region).filter(Boolean))).sort();
   }, [wines, filterValues.country]);
 
-  // GENSKABT: Dyb filtreringslogik
+  // Dyb filtreringslogik
   const filteredClientWines = useMemo(() => {
     let result = wines.filter(w => !w.isSoldOut);
 
@@ -110,7 +110,6 @@ export default function VinkortClient() {
       const lower = searchQuery.toLowerCase();
       const searchTerms = lower.split(/\s+/).filter(Boolean);
       result = result.filter(w => {
-        // DYB SØGNING GENSKABT
         const searchableText = [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.pairing, w.facts, w.country, w.region, w.year].join(' ').toLowerCase();
         return searchTerms.every(term => searchableText.includes(term));
       });
@@ -119,7 +118,7 @@ export default function VinkortClient() {
     if (activeTypeFilter !== 'all') result = result.filter(w => w.type === activeTypeFilter);
     if (selectedCountry) result = result.filter(w => w.country === selectedCountry);
 
-    // GENSKABT: Dropdown filtre check
+    // Dropdown filtre check
     if (filterValues.producer !== 'all') result = result.filter(w => w.producer === filterValues.producer);
     if (filterValues.country !== 'all') result = result.filter(w => w.country === filterValues.country);
     if (filterValues.region !== 'all') result = result.filter(w => w.region === filterValues.region);
@@ -148,18 +147,31 @@ export default function VinkortClient() {
     return result;
   }, [wines, searchQuery, activeTypeFilter, activeSubFilter, selectedCountry, filters, filterValues]);
 
+  // Den opdaterede groupedWines
   const groupedWines = useMemo(() => {
     const groups = {};
-    if (activeSubFilter === 'carltons_udvalgte') {
-        groups["Carlton's Udvalgte"] = { wines: filteredClientWines };
-        return groups;
-    }
-    filteredClientWines.forEach(w => {
-      const type = w.type || 'Andet';
-      if (!groups[type]) groups[type] = { countries: {} };
-      const country = w.country || 'Diverse';
-      if (!groups[type].countries[country]) groups[type].countries[country] = [];
-      groups[type].countries[country].push(w);
+    const isSpecialCollection = ['carltons_udvalgte', 'seasonsChoice'].includes(activeSubFilter);
+    const typeOrder = ["Mousserende", "Hvidvin", "Rødvin", "Rosévin", "Dessertvin"];
+    
+    // Sikrer at vi får alle typer, men i den rigtige rækkefølge først
+    const types = [...new Set([...typeOrder, ...filteredClientWines.map(w => w.type).filter(Boolean)])];
+
+    types.forEach(type => {
+      const winesOfType = filteredClientWines.filter(w => w.type === type);
+      if (winesOfType.length === 0) return;
+
+      if (isSpecialCollection) {
+         // Hvis vi viser udvalgte vine, grupperer vi kun efter type
+         groups[type] = { wines: winesOfType };
+      } else {
+         // Normal visning: Gruppér efter type og derefter efter land
+         groups[type] = { countries: {} };
+         winesOfType.forEach(w => {
+           const country = w.country || 'Diverse';
+           if (!groups[type].countries[country]) groups[type].countries[country] = [];
+           groups[type].countries[country].push(w);
+         });
+      }
     });
     return groups;
   }, [filteredClientWines, activeSubFilter]);
@@ -174,7 +186,6 @@ export default function VinkortClient() {
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-gray-800 font-sans pb-20 relative">
       
-      {/* GENSKABT: Feedback Knap */}
       <button onClick={() => setShowFeedbackModal(true)} className="absolute top-6 right-6 text-gray-400 hover:text-[#991b1b] transition-colors flex items-center gap-2 font-bold text-xs uppercase tracking-widest z-10">
           <MessageSquare size={16}/> Giv Feedback
       </button>
@@ -183,7 +194,7 @@ export default function VinkortClient() {
       <header className="bg-white px-6 py-16 text-center shadow-sm border-b border-gray-100">
         <h1 className="text-6xl font-bold text-[#1b4332] font-serif tracking-tight">Carlton</h1>
         <div className="w-24 h-1 bg-[#991b1b] mx-auto mt-6"></div>
-        <p className="text-xl text-gray-500 mt-6 font-serif italic">Udforsk vores håndplukket udvalg</p>
+        <p className="text-xl text-gray-500 mt-6 font-serif italic">Vinkort</p>
       </header>
 
       <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl -mt-6 relative z-20">
@@ -205,7 +216,7 @@ export default function VinkortClient() {
             </button>
         </div>
 
-        {/* GENSKABT: Avancerede Dropdown Filtre */}
+        {/* Avancerede Dropdown Filtre */}
         {showFilters && (
             <div className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-gray-100 animate-in slide-in-from-top-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 items-end gap-4">
@@ -250,26 +261,28 @@ export default function VinkortClient() {
                 <div className="text-center py-20 text-gray-400 italic">Ingen vine matchede din søgning...</div>
             )}
             
-            {Object.keys(groupedWines).map(groupName => (
+            {Object.keys(groupedWines).map(groupName => {
+                const groupData = groupedWines[groupName]; // Sikrer dataen til koden nedenfor
+                return (
                 <div key={groupName}>
                     <h2 className="text-3xl font-bold text-[#1b4332] font-serif border-b-2 border-[#991b1b] pb-2 mb-8">{groupName}</h2>
                     
-                    {groupedWines[groupName].wines ? (
+                    {groupData.wines ? (
                         <div className="divide-y divide-gray-200">
-                            {groupedWines[groupName].wines.map(wine => <WineItem key={wine.id} wine={wine} onClick={() => setSelectedWine(wine)} />)}
+                            {groupData.wines.map(wine => <WineItem key={wine.id} wine={wine} onClick={() => setSelectedWine(wine)} />)}
                         </div>
                     ) : (
-                        Object.keys(groupedWines[groupName].countries).sort().map(country => (
+                        Object.keys(groupData.countries).sort().map(country => (
                             <div key={country} className="mb-10">
                                 <h3 className="text-xl font-bold text-gray-400 font-serif uppercase tracking-widest mb-4">{country}</h3>
                                 <div className="divide-y divide-gray-200">
-                                    {groupedWines[groupName].countries[country].map(wine => <WineItem key={wine.id} wine={wine} onClick={() => setSelectedWine(wine)} />)}
+                                    {groupData.countries[country].map(wine => <WineItem key={wine.id} wine={wine} onClick={() => setSelectedWine(wine)} />)}
                                 </div>
                             </div>
                         ))
                     )}
                 </div>
-            ))}
+            )})}
         </div>
       </div>
 
