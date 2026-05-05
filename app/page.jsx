@@ -199,48 +199,89 @@ export default function VinkortClient() {
 
       <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl -mt-6 relative z-20">
         
-        {/* SØG & FILTRE TOGGLE */}
-        <div className="mb-6 bg-white p-2 rounded-2xl shadow-md border border-gray-100 flex flex-col sm:flex-row items-center gap-2">
-            <div className="flex items-center flex-1 w-full">
-                <Search className="text-gray-400 ml-4 mr-2" size={20} />
-                <input 
-                    type="text" 
-                    placeholder="Søg i kælderen..." 
-                    value={searchQuery} 
-                    onChange={e => setSearchQuery(e.target.value)} 
-                    className="flex-1 p-4 bg-transparent outline-none text-lg w-full" 
-                />
-            </div>
-            <button onClick={() => setShowFilters(!showFilters)} className={`w-full sm:w-auto px-6 py-4 rounded-xl font-bold transition-colors ${showFilters ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                {showFilters ? 'Skjul Filtre' : 'Vis Filtre'}
-            </button>
+        {/* SØG */}
+        <div className="mb-6 bg-white p-2 rounded-2xl shadow-md border border-gray-100 flex items-center">
+            <Search className="text-gray-400 ml-4 mr-2" size={20} />
+            <input 
+                type="text" 
+                placeholder="Søg på navn, drue, producent..." 
+                value={searchQuery} 
+                onChange={e => setSearchQuery(e.target.value)} 
+                className="flex-1 p-4 bg-transparent outline-none text-lg w-full" 
+            />
         </div>
 
-        {/* Avancerede Dropdown Filtre */}
-        {showFilters && (
-            <div className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-gray-100 animate-in slide-in-from-top-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 items-end gap-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-2">Land</label><select value={filterValues.country} onChange={e => setFilterValues({...filterValues, country: e.target.value, region: 'all'})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#991b1b] outline-none"><option value="all">Alle lande</option>{uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-2">Område</label><select value={filterValues.region} onChange={e => setFilterValues({...filterValues, region: e.target.value})} disabled={filterValues.country === 'all'} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#991b1b] outline-none disabled:opacity-50"><option value="all">Alle områder</option>{uniqueRegions.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-2">Producent</label><select value={filterValues.producer} onChange={e => setFilterValues({...filterValues, producer: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#991b1b] outline-none"><option value="all">Alle producenter</option>{uniqueProducers.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-2">Pris</label><select value={filterValues.price} onChange={e => setFilterValues({...filterValues, price: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#991b1b] outline-none"><option value="all">Alle priser</option><option value="0-499">Under 500 kr.</option><option value="500-799">500 - 799 kr.</option><option value="800-1299">800 - 1.299 kr.</option><option value="1300-1999">1.300 - 1.999 kr.</option><option value="2000+">Over 2.000 kr.</option></select></div>
-                <button onClick={() => { setFilterValues({ country: 'all', region: 'all', producer: 'all', price: 'all' }); setActiveTypeFilter('all'); setActiveSubFilter('all'); setSearchQuery(''); }} className="w-full bg-gray-800 text-white p-3 rounded-xl hover:bg-black font-bold transition-colors">Nulstil Alt</button>
-              </div>
+        {/* --- HURTIG FILTRERING KASKADE --- */}
+        <div className="space-y-4 mb-12">
+            
+            {/* RÆKKE 1: VINTYPE */}
+            <div className="flex flex-wrap justify-center gap-3">
+                 {['all', 'Mousserende', 'Hvidvin', 'Rødvin', 'Rosévin', 'Dessertvin'].map(type => (
+                     <button 
+                        key={type} 
+                        onClick={() => { 
+                            setActiveTypeFilter(type); 
+                            setSelectedCountry(null); 
+                            setFilterValues(prev => ({...prev, region: 'all'})); // Nulstiller område
+                        }} 
+                        className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${activeTypeFilter === type ? 'bg-[#991b1b] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'}`}
+                     >
+                        {type === 'all' ? 'Alle Vine' : type}
+                     </button>
+                 ))}
             </div>
-        )}
 
-        {/* TOP FILTRE (Type) */}
-        <nav className="flex flex-wrap justify-center gap-3 mb-6 mt-10">
-             {['all', 'Mousserende', 'Hvidvin', 'Rødvin', 'Rosévin', 'Dessertvin'].map(type => (
-                 <button 
-                    key={type} 
-                    onClick={() => { setActiveTypeFilter(type); setActiveSubFilter('all'); }} 
-                    className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${activeTypeFilter === type ? 'bg-[#991b1b] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'}`}
-                 >
-                    {type === 'all' ? 'Alle Vine' : type}
-                 </button>
-             ))}
-        </nav>
+            {/* RÆKKE 2: LAND (Vises kun hvis en specifik vintype er valgt) */}
+            {activeTypeFilter !== 'all' && (() => {
+                // Find alle lande for den valgte vintype
+                const availableCountriesForType = Array.from(new Set(
+                    wines.filter(w => w.type === activeTypeFilter && !w.isSoldOut).map(w => w.country).filter(Boolean)
+                )).sort();
+
+                if (availableCountriesForType.length === 0) return null;
+
+                return (
+                    <div className="flex flex-wrap justify-center gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                        {availableCountriesForType.map(country => (
+                            <button 
+                                key={country}
+                                onClick={() => { 
+                                    setSelectedCountry(country === selectedCountry ? null : country); 
+                                    setFilterValues(prev => ({...prev, region: 'all'})); // Nulstiller område ved skift af land
+                                }}
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${selectedCountry === country ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                                {country}
+                            </button>
+                        ))}
+                    </div>
+                );
+            })()}
+
+            {/* RÆKKE 3: OMRÅDE (Vises kun hvis et land er valgt) */}
+            {selectedCountry && (() => {
+                // Find alle områder for den valgte vintype og det valgte land
+                const availableRegions = Array.from(new Set(
+                    wines.filter(w => w.type === activeTypeFilter && w.country === selectedCountry && !w.isSoldOut).map(w => w.region).filter(Boolean)
+                )).sort();
+
+                if (availableRegions.length === 0) return null;
+
+                return (
+                    <div className="flex flex-wrap justify-center gap-2 pt-2 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
+                        {availableRegions.map(region => (
+                            <button 
+                                key={region}
+                                onClick={() => setFilterValues(prev => ({...prev, region: region === prev.region ? 'all' : region}))}
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filterValues.region === region ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}
+                            >
+                                {region}
+                            </button>
+                        ))}
+                    </div>
+                );
+            })()}
+        </div>
 
         {/* SUB FILTRE (Carltons Udvalgte osv) */}
         <div className="flex flex-wrap justify-center gap-2 mb-12 border-t border-gray-200 pt-6">
