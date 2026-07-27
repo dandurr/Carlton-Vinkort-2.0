@@ -53,9 +53,12 @@ export default function AdminVinkort() {
   const [newFilterLabel, setNewFilterLabel] = useState('');
   const [newFilterSearch, setNewFilterSearch] = useState('');
   const [editingWine, setEditingWine] = useState(null);
+  
+  // Filter & Search States
   const [adminSort, setAdminSort] = useState('producer_asc');
   const [adminSearch, setAdminSearch] = useState('');
   const [adminTypeFilter, setAdminTypeFilter] = useState('all');
+  const [showSoldOut, setShowSoldOut] = useState(false); // NY: Til "Vis Udsolgte" filter
 
   const [mathState, setMathState] = useState({ price: 0, purchasePrice: 0 });
 
@@ -135,6 +138,12 @@ export default function AdminVinkort() {
 
   const adminWines = useMemo(() => {
       let res = [...wines];
+      
+      // Filtrer på udsolgte
+      if (showSoldOut) {
+          res = res.filter(w => w.isSoldOut);
+      }
+
       if (adminSearch) {
           const lower = adminSearch.toLowerCase();
           const terms = lower.split(/\s+/).filter(Boolean);
@@ -157,7 +166,7 @@ export default function AdminVinkort() {
           return comparison || a.id.localeCompare(b.id);
       });
       return res;
-  }, [wines, adminSearch, adminTypeFilter, adminSort]);
+  }, [wines, adminSearch, adminTypeFilter, adminSort, showSoldOut]);
 
   const handleLogin = async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, loginEmail, loginPassword); } catch (err) { setLoginError('Forkert email eller adgangskode.'); }};
   const handleLogout = async () => { await signOut(auth); };
@@ -204,6 +213,7 @@ export default function AdminVinkort() {
         producer: data.producer || "", name: data.name || "", year: data.year || "", type: data.type || "",
         country: data.country || "", region: data.region || "", classification: data.classification || "",
         price: parseFloat(data.price) || 0, glass_price: data.glass_price || "", size: data.size || "",
+        note: data.note || "", // <-- NY: Særlig note
         notes: editingWine?.notes || "", origin: editingWine?.origin || "", description: data.description || "",
         grapes: data.grapes || "", pairing: data.pairing || "", facts: data.facts || "",
         carltonsChoice: formData.get('carltonsChoice') === 'on', seasonsChoice: formData.get('seasonsChoice') === 'on',
@@ -438,6 +448,7 @@ export default function AdminVinkort() {
                             <input name="country" list="list-countries" placeholder="Land" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="region" list="list-regions" placeholder="Område" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="name" placeholder="Navn på vin (valgfri)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
+                            <input name="note" placeholder="Særlig Note (f.eks. Egen Import)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             
                             <div className="space-y-1">
                                 <input name="price" type="number" step="any" placeholder="Salgspris (DKK) *" className="p-3 border rounded-xl w-full focus:border-[#991b1b] outline-none" required onChange={(e) => setMathState(s => ({ ...s, price: parseFloat(e.target.value) || 0 }))}/>
@@ -467,7 +478,6 @@ export default function AdminVinkort() {
                             <textarea name="pairing" placeholder="Vinifikation / Madmatch" className="p-3 border rounded-xl md:col-span-3 focus:border-[#991b1b] outline-none" />
                             <textarea name="facts" placeholder="Tekniske Fakta" className="p-3 border rounded-xl md:col-span-3 focus:border-[#991b1b] outline-none" />
                             
-                            {/* AFKRYDSNINGS BOKSE SAT IND HER! */}
                             <div className="lg:col-span-3 flex flex-wrap items-center gap-6 mt-2 mb-2 bg-white p-4 rounded-xl border border-gray-200">
                                  <label className="flex items-center gap-2 font-bold text-gray-700 cursor-pointer"><input type="checkbox" name="carltonsChoice" className="h-5 w-5 text-red-600 rounded" /> Carltons Udvalgte</label>
                                  <label className="flex items-center gap-2 font-bold text-gray-700 cursor-pointer"><input type="checkbox" name="seasonsChoice" className="h-5 w-5 text-red-600 rounded" /> Sæsonens Udvalgte</label>
@@ -504,6 +514,19 @@ export default function AdminVinkort() {
                               <option value="stock_desc">Sorter: Lager (Højest)</option>
                               <option value="cabinet_asc">Sorter: Lokation</option>
                           </select>
+                          
+                          {/* HER ER DEN NYE KNAP TIL UDSOLGTE VINE */}
+                          <button
+                            onClick={() => setShowSoldOut(!showSoldOut)}
+                            className={`px-4 py-3 text-sm font-bold rounded-xl transition-colors border whitespace-nowrap ${
+                              showSoldOut
+                                ? 'bg-red-100 text-red-700 border-red-200'
+                                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {showSoldOut ? 'Viser Udsolgte' : 'Filtrér Udsolgte'}
+                          </button>
+
                           <div className="flex gap-2">
                               <button onClick={printMenu} className="bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 font-bold flex justify-center items-center gap-2"><Printer size={18}/> Print</button>
                               <button onClick={exportCSV} className="bg-[#1b4332] text-white px-4 py-3 rounded-xl hover:bg-[#123023] font-bold flex justify-center items-center gap-2"><Download size={18}/> CSV</button>
@@ -549,7 +572,7 @@ export default function AdminVinkort() {
                                         <input type="number" defaultValue={wine.stockCount} onBlur={(e) => updateStock(wine.id, e.target.value)} className={`w-20 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : ''}`} />
                                     </td>
                                     <td className="px-6 py-4 text-gray-500 font-mono">
-                                        {(wine.wineCabinet || wine.shelf) ? `S:${wine.wineCabinet || '-'} / H:${wine.shelf || '-'}` : '-'}
+                                        {(wine.wineCabinet || wine.shelf) ? `${wine.wineCabinet || '-'} / ${wine.shelf || '-'}` : '-'}
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <button onClick={() => toggleSoldOut(wine)} className={`p-2 rounded-full transition-colors ${wine.isSoldOut ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`} title={wine.isSoldOut ? "Marker på lager" : "Marker som udsolgt"}>
@@ -595,6 +618,7 @@ export default function AdminVinkort() {
                         <input name="country" list="list-countries" defaultValue={editingWine.country} placeholder="Land" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="region" list="list-regions" defaultValue={editingWine.region} placeholder="Område" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="name" defaultValue={editingWine.name} placeholder="Navn på vin" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
+                        <input name="note" defaultValue={editingWine.note} placeholder="Særlig Note (f.eks. Egen Import)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         
                         <div className="space-y-1">
                             <input name="price" type="number" step="any" defaultValue={editingWine.price} placeholder="Salgspris (DKK) *" className="p-3 border rounded-xl w-full focus:border-[#991b1b] outline-none" required onChange={(e) => setMathState(s => ({ ...s, price: parseFloat(e.target.value) || 0 }))}/>

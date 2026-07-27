@@ -365,81 +365,86 @@ function WineItem({ wine, onClick }) {
 }
 
 function WineDetailsModal({ wine, onClose }) {
-    useEffect(() => {
-      if (wine) document.body.style.overflow = 'hidden';
-      return () => document.body.style.overflow = 'unset';
-    }, [wine]);
-  
-    if (!wine) return null;
-    const displayOrigin = [wine.classification, wine.region, wine.country].filter(Boolean).join(', ');
-  
-    return (
-      <div className="fixed inset-0 z-50 overflow-y-auto p-4 bg-black/60 backdrop-blur-sm flex items-center justify-center transition-opacity" onClick={onClose}>
-        <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl my-8 mx-auto animate-in zoom-in-95 duration-200 border-t-8 border-[#991b1b]" onClick={e => e.stopPropagation()}>
-          <div className="relative p-8 sm:p-10">
-            
-            <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
-                <X size={24} />
-            </button>
-            
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 pr-8">
-              <div className="pr-4">
-                <p className="text-3xl sm:text-4xl font-bold text-[#991b1b] font-serif leading-tight">{wine.producer}</p>
-                {wine.name && <h2 className="text-2xl font-normal text-gray-800 font-serif mt-2">{wine.name}</h2>}
-                <p className="text-sm text-gray-500 font-bold uppercase tracking-widest mt-4">{wine.type} - {wine.year}</p>
-                <p className="text-base font-medium text-gray-600 mt-1">{displayOrigin}</p>
-              </div>
+  useEffect(() => {
+    if (wine) document.body.style.overflow = 'hidden';
+    return () => document.body.style.overflow = 'unset';
+  }, [wine]);
+
+  if (!wine) return null;
+  const displayOrigin = [wine.classification, wine.region, wine.country].filter(Boolean).join(', ');
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto p-4 bg-black/60 backdrop-blur-sm flex items-center justify-center transition-opacity" onClick={onClose}>
+      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl my-8 mx-auto animate-in zoom-in-95 duration-200 border-t-8 border-[#991b1b]" onClick={e => e.stopPropagation()}>
+        <div className="relative p-8 sm:p-10">
+          
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
+              <X size={24} />
+          </button>
+          
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 pr-8">
+            <div className="pr-4">
+              <p className="text-3xl sm:text-4xl font-bold text-[#991b1b] font-serif leading-tight">{wine.producer}</p>
+              {wine.name && <h2 className="text-2xl font-normal text-gray-800 font-serif mt-2">{wine.name}</h2>}
               
-              <div className="text-left sm:text-right flex-shrink-0 mt-4 sm:mt-0 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                <p className="text-2xl font-bold text-gray-900">{wine.size && <span className="text-base font-normal mr-1">{wine.size}</span>}{formatCurrency(wine.price)} kr.</p>
-                {wine.glass_price && <p className="text-sm text-gray-600 font-medium mt-1">Glas: {wine.glass_price}</p>}
-              </div>
+              {/* HER ER DEN NYE NOTE BADGE */}
+              {wine.note && (
+                <div className="mt-3">
+                  <span className="inline-block px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#991b1b] bg-red-50 border border-red-100 rounded-full">
+                    {wine.note}
+                  </span>
+                </div>
+              )}
+
+              <p className="text-sm text-gray-500 font-bold uppercase tracking-widest mt-4">{wine.type} - {wine.year}</p>
+              <p className="text-base font-medium text-gray-600 mt-1">{displayOrigin}</p>
             </div>
             
-            <div className="mt-8 pt-8 border-t border-gray-100 space-y-6">
-              {wine.description && (
-                  <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Beskrivelse</p>
-                      <p className="text-gray-800 leading-relaxed text-lg">{wine.description}</p>
-                  </div>
-              )}
-              
-              {wine.grapes && (
-                  <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Druer</p>
-                      <p className="text-gray-800">{wine.grapes}</p>
-                  </div>
-              )}
-              
-              {wine.pairing && (
-                  <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Vinifikation & Madmatch</p>
-                      <p className="text-gray-800 leading-relaxed">{wine.pairing}</p>
-                  </div>
-              )}
-              
-              {wine.facts && (
-                  <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Fakta</p>
-                      <p className="text-gray-800">{wine.facts}</p>
-                  </div>
-              )}
+            <div className="text-left sm:text-right flex-shrink-0 mt-4 sm:mt-0 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+              <p className="text-2xl font-bold text-gray-900">{wine.size && <span className="text-base font-normal mr-1">{wine.size}</span>}{formatCurrency(wine.price)} kr.</p>
+              {wine.glass_price && <p className="text-sm text-gray-600 font-medium mt-1">Glas: {wine.glass_price}</p>}
             </div>
-  
-            {/* DISKRET LOKATION TIL TJENEREN */}
-            {(wine.wineCabinet || wine.shelf) && (
-              <div className="mt-6 text-right">
-                <span 
-                  className="text-[10px] text-gray-300 font-mono tracking-widest cursor-default select-none hover:text-gray-400 transition-colors" 
-                  title="Lokation (Skab / Hylde)"
-                >
-                  {wine.wineCabinet || '-'} / {wine.shelf || '-'}
-                </span>
-              </div>
-            )}
-  
           </div>
+          
+          <div className="mt-8 pt-8 border-t border-gray-100 space-y-6">
+            {wine.description && (
+                <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Beskrivelse</p>
+                    <p className="text-gray-800 leading-relaxed text-lg">{wine.description}</p>
+                </div>
+            )}
+            
+            {wine.grapes && (
+                <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Druer</p>
+                    <p className="text-gray-800">{wine.grapes}</p>
+                </div>
+            )}
+            
+            {wine.pairing && (
+                <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Vinifikation & Madmatch</p>
+                    <p className="text-gray-800 leading-relaxed">{wine.pairing}</p>
+                </div>
+            )}
+            
+            {wine.facts && (
+                <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Fakta</p>
+                    <p className="text-gray-800">{wine.facts}</p>
+                </div>
+            )}
+          </div>
+
+          {(wine.wineCabinet || wine.shelf) && (
+            <div className="mt-6 text-right">
+              <span className="text-[10px] text-gray-300 font-mono tracking-widest cursor-default select-none hover:text-gray-400 transition-colors" title="Lokation (Skab / Hylde)">
+                {wine.wineCabinet || '-'} / {wine.shelf || '-'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
