@@ -20,6 +20,7 @@ const AlertCircle = ({size=20, className=""}) => <svg width={size} height={size}
 const Settings = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 const HistoryIcon = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>;
 const MessageSquare = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+const Activity = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
 
 const formatCurrency = (amount) => (amount || 0).toLocaleString('da-DK');
 const calculateProfit = (salesPrice, purchasePriceExVat) => {
@@ -38,9 +39,10 @@ export default function AdminVinkort() {
   const [sensitiveWines, setSensitiveWines] = useState({});
   const [filters, setFilters] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
+  const [syncLogs, setSyncLogs] = useState([]); // NYT: Til API historik
 
   // Tabs
-  const [adminTab, setAdminTab] = useState('wines'); // wines, history, feedback
+  const [adminTab, setAdminTab] = useState('wines'); // wines, history, feedback, sync
 
   // Login States
   const [loginEmail, setLoginEmail] = useState('');
@@ -53,12 +55,13 @@ export default function AdminVinkort() {
   const [newFilterLabel, setNewFilterLabel] = useState('');
   const [newFilterSearch, setNewFilterSearch] = useState('');
   const [editingWine, setEditingWine] = useState(null);
+  const [expandedSync, setExpandedSync] = useState(null); // Til at folde API logs ud
   
   // Filter & Search States
   const [adminSort, setAdminSort] = useState('producer_asc');
   const [adminSearch, setAdminSearch] = useState('');
   const [adminTypeFilter, setAdminTypeFilter] = useState('all');
-  const [showSoldOut, setShowSoldOut] = useState(false); // NY: Til "Vis Udsolgte" filter
+  const [showSoldOut, setShowSoldOut] = useState(false);
 
   const [mathState, setMathState] = useState({ price: 0, purchasePrice: 0 });
 
@@ -100,7 +103,15 @@ export default function AdminVinkort() {
         setFeedbacks(fb);
     });
 
-    return () => { unsubConfig(); unsubPublic(); unsubSensitive(); unsubFeedback(); };
+    // NYT: Lyt til sync_logs
+    const unsubSync = onSnapshot(collection(db, 'sync_logs'), (snapshot) => {
+        const logs = [];
+        snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
+        logs.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setSyncLogs(logs);
+    });
+
+    return () => { unsubConfig(); unsubPublic(); unsubSensitive(); unsubFeedback(); unsubSync(); };
   }, [user]);
 
   useEffect(() => {
@@ -139,7 +150,6 @@ export default function AdminVinkort() {
   const adminWines = useMemo(() => {
       let res = [...wines];
       
-      // Filtrer på udsolgte
       if (showSoldOut) {
           res = res.filter(w => w.isSoldOut);
       }
@@ -147,7 +157,7 @@ export default function AdminVinkort() {
       if (adminSearch) {
           const lower = adminSearch.toLowerCase();
           const terms = lower.split(/\s+/).filter(Boolean);
-          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type].join(' ').toLowerCase().includes(t)));
+          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku].join(' ').toLowerCase().includes(t)));
       }
       if (adminTypeFilter !== 'all') res = res.filter(w => w.type === adminTypeFilter);
       
@@ -213,13 +223,14 @@ export default function AdminVinkort() {
         producer: data.producer || "", name: data.name || "", year: data.year || "", type: data.type || "",
         country: data.country || "", region: data.region || "", classification: data.classification || "",
         price: parseFloat(data.price) || 0, glass_price: data.glass_price || "", size: data.size || "",
-        note: data.note || "", // <-- NY: Særlig note
+        note: data.note || "", sku: data.sku || "", 
         notes: editingWine?.notes || "", origin: editingWine?.origin || "", description: data.description || "",
         grapes: data.grapes || "", pairing: data.pairing || "", facts: data.facts || "",
         carltonsChoice: formData.get('carltonsChoice') === 'on', seasonsChoice: formData.get('seasonsChoice') === 'on',
         isSoldOut: formData.get('isSoldOut') === 'on', updatedAt: timestamp, wineCabinet: parsedWineCabinet, shelf: parsedShelf,
     };
-    const sensitiveData = { purchasePrice: parseFloat(data.purchasePrice) || 0, stockCount: parseInt(data.stockCount) || 0, wineCabinet: parsedWineCabinet, shelf: parsedShelf };
+    
+    const sensitiveData = { purchasePrice: parseFloat(data.purchasePrice) || 0, stockCount: parseFloat(data.stockCount) || 0, wineCabinet: parsedWineCabinet, shelf: parsedShelf };
 
     try {
         if (editingWine) {
@@ -243,12 +254,12 @@ export default function AdminVinkort() {
   };
   
   const toggleSoldOut = async (wine) => { await updateDoc(doc(db, 'wines', wine.id), { isSoldOut: !wine.isSoldOut, updatedAt: new Date().toISOString() }); };
-  const updateStock = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { stockCount: parseInt(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
+  const updateStock = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { stockCount: parseFloat(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
   const updatePurchasePrice = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { purchasePrice: parseFloat(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
 
   const exportCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,Producent;Navn;År;Salgspris;Indkøbspris;Antal\n";
-    adminWines.forEach(w => { csvContent += `"${w.producer}";"${w.name}";"${w.year}";${w.price};${w.purchasePrice};${w.stockCount}\n`; });
+    let csvContent = "data:text/csv;charset=utf-8,SKU;Producent;Navn;År;Salgspris;Indkøbspris;Antal\n";
+    adminWines.forEach(w => { csvContent += `"${w.sku || ''}";"${w.producer}";"${w.name}";"${w.year}";${w.price};${w.purchasePrice};${w.stockCount}\n`; });
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "lager_eksport.csv");
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
@@ -316,6 +327,10 @@ export default function AdminVinkort() {
               <button onClick={() => setAdminTab('history')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'history' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
                   <HistoryIcon size={18}/> Historik
               </button>
+              {/* NY FANE TIL SYNKRONISERING */}
+              <button onClick={() => setAdminTab('sync')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'sync' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
+                  <Activity size={18}/> Synkronisering
+              </button>
               <button onClick={() => setAdminTab('feedback')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'feedback' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
                   <MessageSquare size={18}/> Feedback ({feedbacks.length})
               </button>
@@ -326,7 +341,7 @@ export default function AdminVinkort() {
               <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
                   <div className="flex items-center gap-3 mb-6 border-b pb-4">
                       <HistoryIcon className="text-[#991b1b]" size={28}/>
-                      <h2 className="text-2xl font-bold font-serif text-gray-900">Seneste Ændringer</h2>
+                      <h2 className="text-2xl font-bold font-serif text-gray-900">Seneste Ændringer i Lager</h2>
                   </div>
                   <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
@@ -359,6 +374,76 @@ export default function AdminVinkort() {
                           </tbody>
                       </table>
                   </div>
+              </div>
+          )}
+
+          {/* NY TAB: SYNKRONISERING LOGS */}
+          {adminTab === 'sync' && (
+              <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
+                  <div className="flex justify-between items-center mb-6 border-b pb-4">
+                      <div className="flex items-center gap-3">
+                          <Activity className="text-[#991b1b]" size={28}/>
+                          <h2 className="text-2xl font-bold font-serif text-gray-900">NemPOS Integration</h2>
+                      </div>
+                      <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">CRON Job Logs</span>
+                  </div>
+                  
+                  {syncLogs.length === 0 ? (
+                      <p className="text-gray-500 italic py-10 text-center">Ingen kørsler registreret endnu.</p>
+                  ) : (
+                      <div className="space-y-4">
+                          {syncLogs.map(log => {
+                              const isSuccess = log.status === 'success';
+                              const isExpanded = expandedSync === log.id;
+                              
+                              return (
+                                  <div key={log.id} className={`border p-5 rounded-xl transition-all ${isSuccess ? 'border-gray-200 bg-white' : 'border-red-200 bg-red-50'}`}>
+                                      <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedSync(isExpanded ? null : log.id)}>
+                                          <div className="flex items-center gap-4">
+                                              <div className={`w-3 h-3 rounded-full ${isSuccess ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                              <div>
+                                                  <div className="font-bold text-gray-900">{new Date(log.createdAt).toLocaleString('da-DK', { dateStyle: 'full', timeStyle: 'short' })}</div>
+                                                  <div className="text-sm text-gray-500">
+                                                      {isSuccess ? `Synkroniseret: ${log.processedCount} varer opdateret` : `Fejl: ${log.error}`}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          {isSuccess && log.processedCount > 0 && (
+                                              <button className="text-sm font-medium text-[#991b1b] bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors">
+                                                  {isExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
+                                              </button>
+                                          )}
+                                      </div>
+                                      
+                                      {isExpanded && isSuccess && log.details && log.details.length > 0 && (
+                                          <div className="mt-4 pt-4 border-t border-gray-100">
+                                              <table className="w-full text-left text-sm">
+                                                  <thead className="text-gray-400 font-bold uppercase tracking-wider text-xs">
+                                                      <tr>
+                                                          <th className="pb-2">Varenavn (NemPOS)</th>
+                                                          <th className="pb-2">SKU</th>
+                                                          <th className="pb-2">Type</th>
+                                                          <th className="pb-2 text-right">Fratrukket</th>
+                                                      </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-gray-50">
+                                                      {log.details.map((detail, idx) => (
+                                                          <tr key={idx}>
+                                                              <td className="py-2 text-gray-800">{detail.name}</td>
+                                                              <td className="py-2 font-mono text-gray-500">{detail.sku}</td>
+                                                              <td className="py-2"><span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">{detail.type}</span></td>
+                                                              <td className="py-2 text-right font-bold text-gray-900">-{detail.deducted}</td>
+                                                          </tr>
+                                                      ))}
+                                                  </tbody>
+                                              </table>
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  )}
               </div>
           )}
 
@@ -448,6 +533,8 @@ export default function AdminVinkort() {
                             <input name="country" list="list-countries" placeholder="Land" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="region" list="list-regions" placeholder="Område" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="name" placeholder="Navn på vin (valgfri)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
+                            
+                            <input name="sku" placeholder="Varenummer (SKU)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none font-mono" />
                             <input name="note" placeholder="Særlig Note (f.eks. Egen Import)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             
                             <div className="space-y-1">
@@ -466,7 +553,7 @@ export default function AdminVinkort() {
                                 )}
                             </div>
 
-                            <input name="stockCount" type="number" placeholder="Antal på lager" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
+                            <input name="stockCount" type="number" step="any" placeholder="Antal på lager" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="wineCabinet" type="number" placeholder="Vinskab Nr." className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="shelf" type="number" placeholder="Hylde Nr." className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             
@@ -515,7 +602,6 @@ export default function AdminVinkort() {
                               <option value="cabinet_asc">Sorter: Lokation</option>
                           </select>
                           
-                          {/* HER ER DEN NYE KNAP TIL UDSOLGTE VINE */}
                           <button
                             onClick={() => setShowSoldOut(!showSoldOut)}
                             className={`px-4 py-3 text-sm font-bold rounded-xl transition-colors border whitespace-nowrap ${
@@ -561,7 +647,10 @@ export default function AdminVinkort() {
                             {adminWines.map(wine => (
                                 <tr key={wine.id} className={`hover:bg-gray-50 transition-colors ${wine.isSoldOut ? 'bg-red-50/30' : ''}`}>
                                     <td className="px-6 py-4">
-                                        <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
+                                        <div className="font-bold text-gray-900 text-base flex items-center gap-2">
+                                            {wine.producer}
+                                            {wine.sku && <span className="text-[10px] font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">SKU: {wine.sku}</span>}
+                                        </div>
                                         <div className="text-gray-600">{wine.name} {wine.year ? `- ${wine.year}` : ''}</div>
                                         <div className="text-xs text-gray-400 mt-1">{wine.classification} | {formatCurrency(wine.price)} kr.</div>
                                     </td>
@@ -569,7 +658,7 @@ export default function AdminVinkort() {
                                         <input type="number" step="any" defaultValue={wine.purchasePrice} onBlur={(e) => updatePurchasePrice(wine.id, e.target.value)} className="w-24 p-2 border rounded-lg text-right focus:border-[#991b1b] outline-none" />
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <input type="number" defaultValue={wine.stockCount} onBlur={(e) => updateStock(wine.id, e.target.value)} className={`w-20 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : ''}`} />
+                                        <input type="number" step="any" defaultValue={wine.stockCount} onBlur={(e) => updateStock(wine.id, e.target.value)} className={`w-20 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : ''}`} />
                                     </td>
                                     <td className="px-6 py-4 text-gray-500 font-mono">
                                         {(wine.wineCabinet || wine.shelf) ? `${wine.wineCabinet || '-'} / ${wine.shelf || '-'}` : '-'}
@@ -618,6 +707,8 @@ export default function AdminVinkort() {
                         <input name="country" list="list-countries" defaultValue={editingWine.country} placeholder="Land" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="region" list="list-regions" defaultValue={editingWine.region} placeholder="Område" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="name" defaultValue={editingWine.name} placeholder="Navn på vin" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
+                        
+                        <input name="sku" defaultValue={editingWine.sku} placeholder="Varenummer (SKU)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none font-mono" />
                         <input name="note" defaultValue={editingWine.note} placeholder="Særlig Note (f.eks. Egen Import)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         
                         <div className="space-y-1">
@@ -636,7 +727,7 @@ export default function AdminVinkort() {
                             )}
                         </div>
 
-                        <input name="stockCount" type="number" defaultValue={editingWine.stockCount} placeholder="Antal på lager" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
+                        <input name="stockCount" type="number" step="any" defaultValue={editingWine.stockCount} placeholder="Antal på lager" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="wineCabinet" type="number" defaultValue={editingWine.wineCabinet} placeholder="Vinskab Nr." className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="shelf" type="number" defaultValue={editingWine.shelf} placeholder="Hylde Nr." className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="glass_price" defaultValue={editingWine.glass_price} placeholder="Glaspris" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
