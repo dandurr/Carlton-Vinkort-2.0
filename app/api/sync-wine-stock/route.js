@@ -139,6 +139,7 @@ export async function GET(req) {
       processedCount: updatedWines.length,
       details: updatedWines,
     });
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Giver Firebase tid til at gemme
 
     console.log('Synkronisering fuldført!');
     return NextResponse.json({ success: true, processed: updatedWines.length, details: updatedWines });
