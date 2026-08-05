@@ -39,7 +39,7 @@ export default function AdminVinkort() {
   const [sensitiveWines, setSensitiveWines] = useState({});
   const [filters, setFilters] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [syncLogs, setSyncLogs] = useState([]); // NYT: Til API historik
+  const [syncLogs, setSyncLogs] = useState([]);
 
   // Tabs
   const [adminTab, setAdminTab] = useState('wines'); // wines, history, feedback, sync
@@ -55,7 +55,7 @@ export default function AdminVinkort() {
   const [newFilterLabel, setNewFilterLabel] = useState('');
   const [newFilterSearch, setNewFilterSearch] = useState('');
   const [editingWine, setEditingWine] = useState(null);
-  const [expandedSync, setExpandedSync] = useState(null); // Til at folde API logs ud
+  const [expandedSync, setExpandedSync] = useState(null);
   
   // Filter & Search States
   const [adminSort, setAdminSort] = useState('producer_asc');
@@ -103,7 +103,6 @@ export default function AdminVinkort() {
         setFeedbacks(fb);
     });
 
-    // NYT: Lyt til sync_logs
     const unsubSync = onSnapshot(collection(db, 'sync_logs'), (snapshot) => {
         const logs = [];
         snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
@@ -257,8 +256,12 @@ export default function AdminVinkort() {
   const updateStock = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { stockCount: parseFloat(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
   const updatePurchasePrice = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { purchasePrice: parseFloat(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
 
+  // --- NYT: Direkte opdatering af Salgspris og PLU ---
+  const updatePrice = async (id, val) => { await updateDoc(doc(db, 'wines', id), { price: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
+  const updateSku = async (id, val) => { await updateDoc(doc(db, 'wines', id), { sku: val.trim(), updatedAt: new Date().toISOString() }); };
+
   const exportCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,SKU;Producent;Navn;År;Salgspris;Indkøbspris;Antal\n";
+    let csvContent = "data:text/csv;charset=utf-8,PLU/SKU;Producent;Navn;År;Salgspris;Indkøbspris;Antal\n";
     adminWines.forEach(w => { csvContent += `"${w.sku || ''}";"${w.producer}";"${w.name}";"${w.year}";${w.price};${w.purchasePrice};${w.stockCount}\n`; });
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "lager_eksport.csv");
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -327,7 +330,6 @@ export default function AdminVinkort() {
               <button onClick={() => setAdminTab('history')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'history' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
                   <HistoryIcon size={18}/> Historik
               </button>
-              {/* NY FANE TIL SYNKRONISERING */}
               <button onClick={() => setAdminTab('sync')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'sync' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
                   <Activity size={18}/> Synkronisering
               </button>
@@ -377,7 +379,7 @@ export default function AdminVinkort() {
               </div>
           )}
 
-          {/* NY TAB: SYNKRONISERING LOGS */}
+          {/* TAB: SYNKRONISERING LOGS */}
           {adminTab === 'sync' && (
               <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
                   <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -421,7 +423,7 @@ export default function AdminVinkort() {
                                                   <thead className="text-gray-400 font-bold uppercase tracking-wider text-xs">
                                                       <tr>
                                                           <th className="pb-2">Varenavn (NemPOS)</th>
-                                                          <th className="pb-2">SKU</th>
+                                                          <th className="pb-2">PLU</th>
                                                           <th className="pb-2">Type</th>
                                                           <th className="pb-2 text-right">Fratrukket</th>
                                                       </tr>
@@ -430,7 +432,7 @@ export default function AdminVinkort() {
                                                       {log.details.map((detail, idx) => (
                                                           <tr key={idx}>
                                                               <td className="py-2 text-gray-800">{detail.name}</td>
-                                                              <td className="py-2 font-mono text-gray-500">{detail.sku}</td>
+                                                              <td className="py-2 font-mono text-gray-500">{detail.plu || detail.sku}</td>
                                                               <td className="py-2"><span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">{detail.type}</span></td>
                                                               <td className="py-2 text-right font-bold text-gray-900">-{detail.deducted}</td>
                                                           </tr>
@@ -534,7 +536,7 @@ export default function AdminVinkort() {
                             <input name="region" list="list-regions" placeholder="Område" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             <input name="name" placeholder="Navn på vin (valgfri)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             
-                            <input name="sku" placeholder="Varenummer (SKU)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none font-mono" />
+                            <input name="sku" placeholder="PLU nummer" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none font-mono" />
                             <input name="note" placeholder="Særlig Note (f.eks. Egen Import)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                             
                             <div className="space-y-1">
@@ -636,8 +638,10 @@ export default function AdminVinkort() {
                         <thead className="bg-gray-50 text-gray-600">
                             <tr>
                                 <th className="px-6 py-4 font-bold uppercase tracking-wider">Producent & Vin</th>
-                                <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">Købspris</th>
-                                <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">Lager</th>
+                                <th className="px-4 py-4 font-bold uppercase tracking-wider text-center">PLU</th>
+                                <th className="px-4 py-4 font-bold uppercase tracking-wider text-right">Salgspris</th>
+                                <th className="px-4 py-4 font-bold uppercase tracking-wider text-right">Købspris</th>
+                                <th className="px-4 py-4 font-bold uppercase tracking-wider text-right">Lager</th>
                                 <th className="px-6 py-4 font-bold uppercase tracking-wider">Lokation</th>
                                 <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">Status</th>
                                 <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">Valg</th>
@@ -647,17 +651,34 @@ export default function AdminVinkort() {
                             {adminWines.map(wine => (
                                 <tr key={wine.id} className={`hover:bg-gray-50 transition-colors ${wine.isSoldOut ? 'bg-red-50/30' : ''}`}>
                                     <td className="px-6 py-4">
-                                        <div className="font-bold text-gray-900 text-base flex items-center gap-2">
-                                            {wine.producer}
-                                            {wine.sku && <span className="text-[10px] font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">SKU: {wine.sku}</span>}
-                                        </div>
+                                        <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
                                         <div className="text-gray-600">{wine.name} {wine.year ? `- ${wine.year}` : ''}</div>
-                                        <div className="text-xs text-gray-400 mt-1">{wine.classification} | {formatCurrency(wine.price)} kr.</div>
+                                        <div className="text-xs text-gray-400 mt-1">{wine.classification}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    {/* DIREKTE TASTING AF PLU */}
+                                    <td className="px-4 py-4 text-center">
+                                        <input 
+                                          type="text" 
+                                          defaultValue={wine.sku} 
+                                          onBlur={(e) => updateSku(wine.id, e.target.value)} 
+                                          placeholder="PLU"
+                                          className="w-20 p-2 border rounded-lg text-center font-mono focus:border-[#991b1b] outline-none" 
+                                        />
+                                    </td>
+                                    {/* DIREKTE TASTING AF SALGSPRIS */}
+                                    <td className="px-4 py-4 text-right">
+                                        <input 
+                                          type="number" 
+                                          step="any" 
+                                          defaultValue={wine.price} 
+                                          onBlur={(e) => updatePrice(wine.id, e.target.value)} 
+                                          className="w-24 p-2 border rounded-lg text-right font-bold text-gray-900 focus:border-[#991b1b] outline-none" 
+                                        />
+                                    </td>
+                                    <td className="px-4 py-4 text-right">
                                         <input type="number" step="any" defaultValue={wine.purchasePrice} onBlur={(e) => updatePurchasePrice(wine.id, e.target.value)} className="w-24 p-2 border rounded-lg text-right focus:border-[#991b1b] outline-none" />
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="px-4 py-4 text-right">
                                         <input type="number" step="any" defaultValue={wine.stockCount} onBlur={(e) => updateStock(wine.id, e.target.value)} className={`w-20 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : ''}`} />
                                     </td>
                                     <td className="px-6 py-4 text-gray-500 font-mono">
@@ -708,7 +729,7 @@ export default function AdminVinkort() {
                         <input name="region" list="list-regions" defaultValue={editingWine.region} placeholder="Område" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         <input name="name" defaultValue={editingWine.name} placeholder="Navn på vin" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         
-                        <input name="sku" defaultValue={editingWine.sku} placeholder="Varenummer (SKU)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none font-mono" />
+                        <input name="sku" defaultValue={editingWine.sku} placeholder="PLU nummer" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none font-mono" />
                         <input name="note" defaultValue={editingWine.note} placeholder="Særlig Note (f.eks. Egen Import)" className="p-3 border rounded-xl focus:border-[#991b1b] outline-none" />
                         
                         <div className="space-y-1">
