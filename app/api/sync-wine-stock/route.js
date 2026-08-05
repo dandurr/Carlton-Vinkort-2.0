@@ -4,20 +4,28 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
 
 // Hjælpefunktion: Log ind i NemPOS
+// Hjælpefunktion: Log ind i NemPOS (Nu med sladrehank-funktion!)
 async function getNemposToken() {
-  const loginRes = await fetch('https://api.nempos.dk/api/v1/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({
-      client: process.env.NEMPOS_EMAIL,
-      secret: process.env.NEMPOS_PASSWORD
-    })
-  });
-
-  const data = await loginRes.json();
-  if (!data.status) throw new Error('NemPOS Login fejlede.');
-  return data.token;
-}
+    const loginRes = await fetch('https://api.nempos.dk/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        client: process.env.NEMPOS_EMAIL,
+        secret: process.env.NEMPOS_PASSWORD
+      })
+    });
+  
+    const data = await loginRes.json();
+    
+    if (!data.status) {
+      // HER ER MAGIEN: Vi beder serveren printe PRÆCIS hvad NemPOS svarer
+      console.error("🚨 NEMPOS AFVISTE LOGIN! Detaljer:", data);
+      console.error("Tjekker variabler (skjult adgangskode):", { email: process.env.NEMPOS_EMAIL, hasPassword: !!process.env.NEMPOS_PASSWORD });
+      throw new Error(`NemPOS Login fejlede. Svar fra NemPOS: ${JSON.stringify(data)}`);
+    }
+    
+    return data.token;
+  }
 
 export async function GET(req) {
   const authHeader = req.headers.get('authorization');
