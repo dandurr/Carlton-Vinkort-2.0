@@ -3,26 +3,28 @@ import { collection, query, where, getDocs, doc, setDoc, increment, addDoc } fro
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
 
-// Hjælpefunktion: Log ind i NemPOS
+// Hjælpefunktion: Log ind i NemPOS (Forklædt som en rigtig browser)
 async function getNemposToken() {
-  const loginRes = await fetch('https://api.nempos.dk/api/v1/auth/login', {
+  const loginRes = await fetch('https://api.nempos.dk/api/v1/login', {
     method: 'POST',
     headers: { 
-      'Content-Type': 'application/json', 
       'Accept': 'application/json',
-      'company_uuid': process.env.NEMPOS_COMPANY_UUID,
-      'VUE_APP_VERSION_KEY': process.env.NEMPOS_APP_VERSION
+      'Content-Type': 'application/json;charset=UTF-8',
+      'Company-Uuid': process.env.NEMPOS_COMPANY_UUID,
+      'Origin': 'https://app.nempos.dk',
+      'Referer': 'https://app.nempos.dk/',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
     },
     body: JSON.stringify({
       client: process.env.NEMPOS_EMAIL,
-      secret: process.env.NEMPOS_PASSWORD,
-      company_uuid: process.env.NEMPOS_COMPANY_UUID
+      secret: process.env.NEMPOS_PASSWORD
     })
   });
 
   const data = await loginRes.json();
   
-  if (!data.status) {
+  // Tjekker om login gik igennem (succes giver en token)
+  if (!data.token) {
     console.error("🚨 NEMPOS AFVISTE LOGIN! Detaljer:", data);
     throw new Error(`NemPOS Login fejlede. Svar fra NemPOS: ${JSON.stringify(data)}`);
   }
@@ -43,14 +45,15 @@ export async function GET(req) {
     // 1. Log ind i Firebase
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
     
-    // 2. Få adgang til NemPOS med de nye headers
+    // 2. Få adgang til NemPOS med de nye "browser"-headers
     const activeToken = await getNemposToken();
     const nemposHeaders = {
       'Authorization': `Bearer ${activeToken}`,
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'company_uuid': process.env.NEMPOS_COMPANY_UUID,
-      'VUE_APP_VERSION_KEY': process.env.NEMPOS_APP_VERSION
+      'Content-Type': 'application/json',
+      'Company-Uuid': process.env.NEMPOS_COMPANY_UUID,
+      'Origin': 'https://app.nempos.dk',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
     };
 
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -78,6 +81,7 @@ export async function GET(req) {
         const detailRes = await fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}`, { headers: nemposHeaders });
         const detailData = await detailRes.json();
 
+        // Sikkerhedstjek hvis bonen er tom
         if (!detailData.order || !detailData.order.order_lines) continue;
 
         // 4. Gennemgå bon-linjer
@@ -85,7 +89,7 @@ export async function GET(req) {
           const extId = line.sellable?.external_id; // Varenummer (SKU)
 
           if (extId) {
-            // Tjekker om "Glas" blev solgt
+            // Tjekker om "Glas" blev solgt (via slaverne på produktet)
             const isGlass = line.slaves?.some(slave => 
               slave.product_name && slave.product_name.toLowerCase().includes('glas')
             );
@@ -135,7 +139,7 @@ export async function GET(req) {
   } catch (error) {
     console.error('Fejl:', error);
     
-    // Gem fejl-log hvis det fejler
+    // Gem fejl-log, hvis noget krakelerer
     try {
         await addDoc(collection(db, 'sync_logs'), {
           createdAt: new Date().toISOString(),
