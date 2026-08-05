@@ -3,7 +3,7 @@ import { collection, query, where, getDocs, doc, setDoc, increment, addDoc } fro
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
 
-// Hjælpefunktion: Log ind i NemPOS (Forklædt som en rigtig browser)
+// Hjælpefunktion: Log ind i NemPOS
 async function getNemposToken() {
   const loginRes = await fetch('https://api.nempos.dk/api/v1/login', {
     method: 'POST',
@@ -22,18 +22,11 @@ async function getNemposToken() {
   });
 
   const data = await loginRes.json();
-  
-  // Tjekker om login gik igennem (succes giver en token)
-  if (!data.token) {
-    console.error("🚨 NEMPOS AFVISTE LOGIN! Detaljer:", data);
-    throw new Error(`NemPOS Login fejlede. Svar fra NemPOS: ${JSON.stringify(data)}`);
-  }
-  
+  if (!data.token) throw new Error(`NemPOS Login fejlede. Svar: ${JSON.stringify(data)}`);
   return data.token;
 }
 
 export async function GET(req) {
-  // SIKKERHED: Tjek din hemmelige Vercel CRON kode
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -42,11 +35,12 @@ export async function GET(req) {
   try {
     console.log('Starter natsynkronisering af vinlager...');
 
-    // 1. Log ind i Firebase
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
-    
-    // 2. Få adgang til NemPOS med de nye "browser"-headers
+    console.log('Firebase login succes!');
+
     const activeToken = await getNemposToken();
+    console.log('NemPOS login succes!');
+
     const nemposHeaders = {
       'Authorization': `Bearer ${activeToken}`,
       'Accept': 'application/json',
@@ -62,42 +56,54 @@ export async function GET(req) {
     let page = 1;
     let keepFetching = true;
 
-    // 3. Loop igennem siderne (PAGINERING)
     while (keepFetching) {
+      console.log(`Henter side ${page} fra NemPOS...`);
       const ordersRes = await fetch(`https://api.nempos.dk/api/v1/orders/filtered?page=${page}`, { headers: nemposHeaders });
       const ordersData = await ordersRes.json();
 
-      if (!ordersData.orders || ordersData.orders.length === 0) break; 
+      if (!ordersData.orders || ordersData.orders.length === 0) {
+        console.log('Ingen flere ordrer at hente.');
+        break; 
+      }
 
+      // Find de ordrer, vi faktisk skal hente detaljer for
+      const ordersToProcess = [];
       for (const order of ordersData.orders) {
         if (order.status !== 'completed') continue;
 
         const orderDate = new Date(order.created_at);
         if (orderDate < yesterday) {
-          keepFetching = false;
+          keepFetching = false; // Vi har ramt i går, stop med at hente næste side
           break; 
         }
+        ordersToProcess.push(order);
+      }
 
-        const detailRes = await fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}`, { headers: nemposHeaders });
-        const detailData = await detailRes.json();
+      console.log(`Fandt ${ordersToProcess.length} relevante ordrer på side ${page}. Henter bon-detaljer i parallel...`);
 
-        // Sikkerhedstjek hvis bonen er tom
+      // Hent alle boner for denne side SAMTIDIGT (Lynhurtigt!)
+      const detailPromises = ordersToProcess.map(order => 
+        fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}`, { headers: nemposHeaders })
+          .then(res => res.json())
+      );
+      
+      const allDetails = await Promise.all(detailPromises);
+      console.log(`Bon-detaljer hentet for side ${page}. Analyserer vin-linjer...`);
+
+      // Gennemgå linjerne
+      for (const detailData of allDetails) {
         if (!detailData.order || !detailData.order.order_lines) continue;
 
-        // 4. Gennemgå bon-linjer
         for (const line of detailData.order.order_lines) {
-          const extId = line.sellable?.external_id; // Varenummer (SKU)
+          const extId = line.sellable?.external_id;
 
           if (extId) {
-            // Tjekker om "Glas" blev solgt (via slaverne på produktet)
             const isGlass = line.slaves?.some(slave => 
               slave.product_name && slave.product_name.toLowerCase().includes('glas')
             );
 
-            // Udregn mængden. 1 hel = 1. Glas = 0.2
             const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
 
-            // 5. Slå op i Firebase og opdater
             const q = query(collection(db, 'wines'), where('sku', '==', extId));
             const wineQuery = await getDocs(q);
 
@@ -122,10 +128,11 @@ export async function GET(req) {
           }
         }
       }
-      page++;
+      
+      if (keepFetching) page++;
     }
 
-    // 6. Gem en log over kørslen
+    console.log(`Skriver succes-log til databasen. Opdaterede ${updatedWines.length} vin-linjer.`);
     await addDoc(collection(db, 'sync_logs'), {
       createdAt: new Date().toISOString(),
       status: 'success',
@@ -137,9 +144,8 @@ export async function GET(req) {
     return NextResponse.json({ success: true, processed: updatedWines.length, details: updatedWines });
 
   } catch (error) {
-    console.error('Fejl:', error);
+    console.error('Kritisk fejl under synkronisering:', error);
     
-    // Gem fejl-log, hvis noget krakelerer
     try {
         await addDoc(collection(db, 'sync_logs'), {
           createdAt: new Date().toISOString(),
