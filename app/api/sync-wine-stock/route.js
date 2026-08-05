@@ -81,44 +81,43 @@ export async function GET(req) {
       
       const allDetails = await Promise.all(detailPromises);
 
-      for (const detailData of allDetails) {
-        if (!detailData.order || !detailData.order.order_lines) continue;
-
-        for (const line of detailData.order.order_lines) {
-          const extId = line.sellable?.external_id;
-
-          if (extId) {
-            const isGlass = line.slaves?.some(slave => 
-              slave.product_name && slave.product_name.toLowerCase().includes('glas')
-            );
-
-            const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
-
-            // BEMÆRK: Vi bruger nu dbLite til at læse og skrive
-            const q = query(collection(dbLite, 'wines'), where('sku', '==', extId));
-            const wineQuery = await getDocs(q);
-
-            if (!wineQuery.empty) {
-              const firebaseId = wineQuery.docs[0].id;
-              
-              await setDoc(doc(dbLite, 'wines_sensitive', firebaseId), {
-                stockCount: increment(-deductionAmount)
-              }, { merge: true });
-
-              await setDoc(doc(dbLite, 'wines', firebaseId), {
-                updatedAt: new Date().toISOString()
-              }, { merge: true });
-
-              updatedWines.push({ 
-                name: line.product_name, 
-                sku: extId, 
-                deducted: deductionAmount,
-                type: isGlass ? 'Glas' : 'Flaske'
-              });
-            }
-          }
-        }
+      // NY KODE (Bruger PLU i stedet):
+for (const line of detailData.order.order_lines) {
+    // Henter PLU fra NemPOS
+    const plu = line.sellable?.plu || line.plu;
+  
+    if (plu) {
+      const isGlass = line.slaves?.some(slave => 
+        slave.product_name && slave.product_name.toLowerCase().includes('glas')
+      );
+  
+      const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
+  
+      // Slår op på PLU (konverteret til tekst for en sikkerheds skyld)
+      const pluString = String(plu);
+      const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
+      const wineQuery = await getDocs(q);
+  
+      if (!wineQuery.empty) {
+        const firebaseId = wineQuery.docs[0].id;
+        
+        await setDoc(doc(dbLite, 'wines_sensitive', firebaseId), {
+          stockCount: increment(-deductionAmount)
+        }, { merge: true });
+  
+        await setDoc(doc(dbLite, 'wines', firebaseId), {
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+  
+        updatedWines.push({ 
+          name: line.product_name, 
+          plu: pluString, 
+          deducted: deductionAmount,
+          type: isGlass ? 'Glas' : 'Flaske'
+        });
       }
+    }
+  }
       if (keepFetching) page++;
     }
 
