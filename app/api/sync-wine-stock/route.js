@@ -1,7 +1,10 @@
-import { db, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, setDoc, increment, addDoc } from 'firebase/firestore';
+import { app, auth } from '@/lib/firebase';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, increment, addDoc } from 'firebase/firestore/lite';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
+
+// Initialiser Lite-versionen af databasen (kun til dette Vercel-script)
+const dbLite = getFirestore(app);
 
 // Hjælpefunktion: Log ind i NemPOS
 async function getNemposToken() {
@@ -36,11 +39,8 @@ export async function GET(req) {
     console.log('Starter natsynkronisering af vinlager...');
 
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
-    console.log('Firebase login succes!');
-
+    
     const activeToken = await getNemposToken();
-    console.log('NemPOS login succes!');
-
     const nemposHeaders = {
       'Authorization': `Bearer ${activeToken}`,
       'Accept': 'application/json',
@@ -57,40 +57,30 @@ export async function GET(req) {
     let keepFetching = true;
 
     while (keepFetching) {
-      console.log(`Henter side ${page} fra NemPOS...`);
       const ordersRes = await fetch(`https://api.nempos.dk/api/v1/orders/filtered?page=${page}`, { headers: nemposHeaders });
       const ordersData = await ordersRes.json();
 
-      if (!ordersData.orders || ordersData.orders.length === 0) {
-        console.log('Ingen flere ordrer at hente.');
-        break; 
-      }
+      if (!ordersData.orders || ordersData.orders.length === 0) break; 
 
-      // Find de ordrer, vi faktisk skal hente detaljer for
       const ordersToProcess = [];
       for (const order of ordersData.orders) {
         if (order.status !== 'completed') continue;
 
         const orderDate = new Date(order.created_at);
         if (orderDate < yesterday) {
-          keepFetching = false; // Vi har ramt i går, stop med at hente næste side
+          keepFetching = false;
           break; 
         }
         ordersToProcess.push(order);
       }
 
-      console.log(`Fandt ${ordersToProcess.length} relevante ordrer på side ${page}. Henter bon-detaljer i parallel...`);
-
-      // Hent alle boner for denne side SAMTIDIGT (Lynhurtigt!)
       const detailPromises = ordersToProcess.map(order => 
         fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}`, { headers: nemposHeaders })
           .then(res => res.json())
       );
       
       const allDetails = await Promise.all(detailPromises);
-      console.log(`Bon-detaljer hentet for side ${page}. Analyserer vin-linjer...`);
 
-      // Gennemgå linjerne
       for (const detailData of allDetails) {
         if (!detailData.order || !detailData.order.order_lines) continue;
 
@@ -104,17 +94,18 @@ export async function GET(req) {
 
             const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
 
-            const q = query(collection(db, 'wines'), where('sku', '==', extId));
+            // BEMÆRK: Vi bruger nu dbLite til at læse og skrive
+            const q = query(collection(dbLite, 'wines'), where('sku', '==', extId));
             const wineQuery = await getDocs(q);
 
             if (!wineQuery.empty) {
               const firebaseId = wineQuery.docs[0].id;
               
-              await setDoc(doc(db, 'wines_sensitive', firebaseId), {
+              await setDoc(doc(dbLite, 'wines_sensitive', firebaseId), {
                 stockCount: increment(-deductionAmount)
               }, { merge: true });
 
-              await setDoc(doc(db, 'wines', firebaseId), {
+              await setDoc(doc(dbLite, 'wines', firebaseId), {
                 updatedAt: new Date().toISOString()
               }, { merge: true });
 
@@ -128,27 +119,24 @@ export async function GET(req) {
           }
         }
       }
-      
       if (keepFetching) page++;
     }
 
-    console.log(`Skriver succes-log til databasen. Opdaterede ${updatedWines.length} vin-linjer.`);
-    await addDoc(collection(db, 'sync_logs'), {
+    // BEMÆRK: Vi bruger dbLite til at gemme loggen. Det sker øjeblikkeligt uden Vercel-fejl!
+    await addDoc(collection(dbLite, 'sync_logs'), {
       createdAt: new Date().toISOString(),
       status: 'success',
       processedCount: updatedWines.length,
       details: updatedWines,
     });
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Giver Firebase tid til at gemme
 
-    console.log('Synkronisering fuldført!');
     return NextResponse.json({ success: true, processed: updatedWines.length, details: updatedWines });
 
   } catch (error) {
-    console.error('Kritisk fejl under synkronisering:', error);
+    console.error('Fejl under synkronisering:', error);
     
     try {
-        await addDoc(collection(db, 'sync_logs'), {
+        await addDoc(collection(dbLite, 'sync_logs'), {
           createdAt: new Date().toISOString(),
           status: 'error',
           error: error.message
