@@ -1,12 +1,10 @@
 import { app, auth } from '@/lib/firebase';
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, increment, addDoc } from 'firebase/firestore/lite';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, getDoc, addDoc } from 'firebase/firestore/lite';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
 
-// Initialiser Lite-versionen af databasen (kun til dette Vercel-script)
 const dbLite = getFirestore(app);
 
-// Hjælpefunktion: Log ind i NemPOS
 async function getNemposToken() {
   const loginRes = await fetch('https://api.nempos.dk/api/v1/login', {
     method: 'POST',
@@ -81,47 +79,66 @@ export async function GET(req) {
       
       const allDetails = await Promise.all(detailPromises);
 
-      // NY KODE (Bruger PLU i stedet):
-for (const line of detailData.order.order_lines) {
-    // Henter PLU fra NemPOS
-    const plu = line.sellable?.plu || line.plu;
-  
-    if (plu) {
-      const isGlass = line.slaves?.some(slave => 
-        slave.product_name && slave.product_name.toLowerCase().includes('glas')
-      );
-  
-      const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
-  
-      // Slår op på PLU (konverteret til tekst for en sikkerheds skyld)
-      const pluString = String(plu);
-      const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
-      const wineQuery = await getDocs(q);
-  
-      if (!wineQuery.empty) {
-        const firebaseId = wineQuery.docs[0].id;
-        
-        await setDoc(doc(dbLite, 'wines_sensitive', firebaseId), {
-          stockCount: increment(-deductionAmount)
-        }, { merge: true });
-  
-        await setDoc(doc(dbLite, 'wines', firebaseId), {
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-  
-        updatedWines.push({ 
-          name: line.product_name, 
-          plu: pluString, 
-          deducted: deductionAmount,
-          type: isGlass ? 'Glas' : 'Flaske'
-        });
+      for (const detailData of allDetails) {
+        if (!detailData.order || !detailData.order.order_lines) continue;
+
+        for (const line of detailData.order.order_lines) {
+          const plu = line.sellable?.plu || line.plu;
+
+          if (plu) {
+            const isGlass = line.slaves?.some(slave => 
+              slave.product_name && slave.product_name.toLowerCase().includes('glas')
+            );
+
+            const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
+            const pluString = String(plu);
+
+            const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
+            const wineQuery = await getDocs(q);
+
+            if (!wineQuery.empty) {
+              const firebaseId = wineQuery.docs[0].id;
+              const sensitiveRef = doc(dbLite, 'wines_sensitive', firebaseId);
+              
+              // 1. Hent nuværende lagerbeholdning
+              const sensitiveSnap = await getDoc(sensitiveRef);
+              const currentStock = sensitiveSnap.exists() ? (sensitiveSnap.data().stockCount || 0) : 0;
+              const newStock = currentStock - deductionAmount;
+              
+              // 2. Tjek om vinen skal meldes automatisk udsolgt
+              const isNowSoldOut = newStock <= 0;
+
+              // 3. Opdater følsom lagerdata
+              await setDoc(sensitiveRef, {
+                stockCount: newStock
+              }, { merge: true });
+
+              // 4. Opdater den offentlige vin (Sætter isSoldOut hvis newStock <= 0)
+              const publicWineUpdate = {
+                updatedAt: new Date().toISOString()
+              };
+
+              if (isNowSoldOut) {
+                publicWineUpdate.isSoldOut = true;
+              }
+
+              await setDoc(doc(dbLite, 'wines', firebaseId), publicWineUpdate, { merge: true });
+
+              updatedWines.push({ 
+                name: line.product_name, 
+                plu: pluString, 
+                deducted: deductionAmount,
+                newStock: newStock,
+                autoSoldOut: isNowSoldOut,
+                type: isGlass ? 'Glas' : 'Flaske'
+              });
+            }
+          }
+        }
       }
-    }
-  }
       if (keepFetching) page++;
     }
 
-    // BEMÆRK: Vi bruger dbLite til at gemme loggen. Det sker øjeblikkeligt uden Vercel-fejl!
     await addDoc(collection(dbLite, 'sync_logs'), {
       createdAt: new Date().toISOString(),
       status: 'success',
