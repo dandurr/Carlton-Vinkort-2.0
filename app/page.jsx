@@ -53,7 +53,7 @@ function FeedbackModal({ onClose, onSuccess }) {
 
 export default function VinkortClient() {
   const [wines, setWines] = useState([]);
-  const [filters, setFilters] = useState([{ id: 'carltons_udvalgte', label: "Carlton's Udvalgte" }]);
+  const [filters, setFilters] = useState([{ id: 'carltons_udvalgte', label: "Carlton's Udvalgte på glas" }]);
   const [loading, setLoading] = useState(true);
 
   // Client States
