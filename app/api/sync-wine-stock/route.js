@@ -34,11 +34,9 @@ export async function GET(req) {
   }
 
   try {
-    console.log('Starter natsynkronisering af vinlager...');
-
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
-    
     const activeToken = await getNemposToken();
+    
     const nemposHeaders = {
       'Authorization': `Bearer ${activeToken}`,
       'Accept': 'application/json',
@@ -48,8 +46,10 @@ export async function GET(req) {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
     };
 
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // ÆNDRET: Vi kigger nu 3 dage tilbage for at være sikre på at fange test-ordrerne!
+    const timeLimit = new Date(Date.now() - 72 * 60 * 60 * 1000); 
     const updatedWines = [];
+    const unmatchedPLUs = []; // Vores nye sladrhank!
     
     let page = 1;
     let keepFetching = true;
@@ -65,7 +65,7 @@ export async function GET(req) {
         if (order.status !== 'completed') continue;
 
         const orderDate = new Date(order.created_at);
-        if (orderDate < yesterday) {
+        if (orderDate < timeLimit) {
           keepFetching = false;
           break; 
         }
@@ -83,6 +83,7 @@ export async function GET(req) {
         if (!detailData.order || !detailData.order.order_lines) continue;
 
         for (const line of detailData.order.order_lines) {
+          // Den helt korrekte PLU-sti fra dit JSON udtræk
           const plu = line.sellable?.plu || line.plu;
 
           if (plu) {
@@ -91,7 +92,7 @@ export async function GET(req) {
             );
 
             const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
-            const pluString = String(plu);
+            const pluString = String(plu).trim(); // Sikrer os at det er ren tekst uden mellemrum
 
             const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
             const wineQuery = await getDocs(q);
@@ -100,27 +101,16 @@ export async function GET(req) {
               const firebaseId = wineQuery.docs[0].id;
               const sensitiveRef = doc(dbLite, 'wines_sensitive', firebaseId);
               
-              // 1. Hent nuværende lagerbeholdning
               const sensitiveSnap = await getDoc(sensitiveRef);
               const currentStock = sensitiveSnap.exists() ? (sensitiveSnap.data().stockCount || 0) : 0;
               const newStock = currentStock - deductionAmount;
               
-              // 2. Tjek om vinen skal meldes automatisk udsolgt
               const isNowSoldOut = newStock <= 0;
 
-              // 3. Opdater følsom lagerdata
-              await setDoc(sensitiveRef, {
-                stockCount: newStock
-              }, { merge: true });
+              await setDoc(sensitiveRef, { stockCount: newStock }, { merge: true });
 
-              // 4. Opdater den offentlige vin (Sætter isSoldOut hvis newStock <= 0)
-              const publicWineUpdate = {
-                updatedAt: new Date().toISOString()
-              };
-
-              if (isNowSoldOut) {
-                publicWineUpdate.isSoldOut = true;
-              }
+              const publicWineUpdate = { updatedAt: new Date().toISOString() };
+              if (isNowSoldOut) publicWineUpdate.isSoldOut = true;
 
               await setDoc(doc(dbLite, 'wines', firebaseId), publicWineUpdate, { merge: true });
 
@@ -132,6 +122,13 @@ export async function GET(req) {
                 autoSoldOut: isNowSoldOut,
                 type: isGlass ? 'Glas' : 'Flaske'
               });
+            } else {
+              // SLADRHANKEN: Hvis den finder en PLU på kassen, men IKKE i databasen, gemmer vi den!
+              unmatchedPLUs.push({
+                name: line.product_name,
+                plu: pluString,
+                orderDate: detailData.order.created_at
+              });
             }
           }
         }
@@ -139,28 +136,30 @@ export async function GET(req) {
       if (keepFetching) page++;
     }
 
+    // Gemmer både successer og vores sladrhank i loggen
     await addDoc(collection(dbLite, 'sync_logs'), {
       createdAt: new Date().toISOString(),
       status: 'success',
       processedCount: updatedWines.length,
       details: updatedWines,
+      unmatchedCount: unmatchedPLUs.length,
+      unmatchedDetails: unmatchedPLUs // Disse vil nu dukke op i din database!
     });
 
-    return NextResponse.json({ success: true, processed: updatedWines.length, details: updatedWines });
+    return NextResponse.json({ 
+      success: true, 
+      processed: updatedWines.length, 
+      unmatched: unmatchedPLUs.length 
+    });
 
   } catch (error) {
-    console.error('Fejl under synkronisering:', error);
-    
     try {
         await addDoc(collection(dbLite, 'sync_logs'), {
           createdAt: new Date().toISOString(),
           status: 'error',
           error: error.message
         });
-    } catch (logError) {
-        console.error('Kunne ikke skrive fejl-log:', logError);
-    }
-
+    } catch (logError) {}
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
