@@ -46,18 +46,19 @@ export async function GET(req) {
       'User-Agent': 'Mozilla/5.0'
     };
 
-    // Vi sætter den til 48 timer for at være 100% sikre på at fange test-køb.
+    // Kigger 48 timer tilbage
     const timeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000); 
     const updatedWines = [];
     const unmatchedPLUs = [];
     
     let page = 1;
 
-    // Vi tvinger den til at kigge 5 sider igennem, uanset hvad!
+    // Tvinger den til at kigge max 5 sider
     while (page <= 5) {
       console.log(`Henter side ${page} fra NemPOS...`);
-      // BEMÆRK: Vi har fjernet "/filtered" og bruger det rene "/orders"
-      const listUrl = `https://api.nempos.dk/api/v1/orders?page=${page}&company_uuid=${process.env.NEMPOS_COMPANY_UUID}`;
+      
+      // DET KORREKTE LINK (fra dit Postman-udtræk)
+      const listUrl = `https://api.nempos.dk/api/v1/orders/filtered?page=${page}&company_uuid=${process.env.NEMPOS_COMPANY_UUID}`;
       
       const ordersRes = await fetch(listUrl, { headers: nemposHeaders });
       const ordersData = await ordersRes.json();
@@ -75,14 +76,13 @@ export async function GET(req) {
 
         const orderDate = new Date(order.created_at);
         if (orderDate < timeLimit) {
-          continue; // Ordren er for gammel, gå til næste.
+          continue; 
         }
         ordersToProcess.push(order);
       }
 
-      console.log(`Fandt ${ordersToProcess.length} gyldige/nye ordrer på side ${page}, som vi nu klikker ind på.`);
+      console.log(`Fandt ${ordersToProcess.length} gyldige ordrer på side ${page}, som vi nu åbner bonerne på...`);
 
-      // Hvis der ER nye ordrer, så henter vi detaljerne (dette var det API kald, du manglede at se!)
       if (ordersToProcess.length > 0) {
           const detailPromises = ordersToProcess.map(order => 
             fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}?company_uuid=${process.env.NEMPOS_COMPANY_UUID}`, { headers: nemposHeaders })
@@ -131,14 +131,14 @@ export async function GET(req) {
                     newStock: newStock,
                     type: isGlass ? 'Glas' : 'Flaske'
                   });
-                  console.log(`TRUKKET FRA LAGER: ${line.product_name} (PLU: ${pluString}) - Nyt lager: ${newStock}`);
+                  console.log(`✅ TRUKKET FRA LAGER: ${line.product_name} (PLU: ${pluString}) - Nyt lager: ${newStock}`);
                 } else {
                   unmatchedPLUs.push({
                     name: line.product_name,
                     plu: pluString,
                     orderDate: detailData.order.created_at
                   });
-                  console.log(`SLADRHANK: Fandt PLU ${pluString} på bon, men den findes ikke i Firebase!`);
+                  console.log(`🕵️ SLADRHANK: Fandt PLU ${pluString} på bon, men den findes ikke i Firebase!`);
                 }
               }
             }
