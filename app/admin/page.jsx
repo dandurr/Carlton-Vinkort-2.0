@@ -354,26 +354,35 @@ export default function AdminVinkort() {
                                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Handling</th>
                               </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                              {historyWines.map(wine => {
-                                  const dateObj = new Date(wine.updatedAt);
-                                  const displayTime = dateObj.toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                                  return (
-                                      <tr key={wine.id} className="hover:bg-gray-50 transition-colors">
-                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">{displayTime}</td>
-                                          <td className="px-6 py-4">
-                                              <div className="font-bold text-gray-900">{wine.producer}</div>
-                                              <div className="text-sm text-gray-600">{wine.name}</div>
-                                          </td>
-                                          <td className="px-6 py-4 whitespace-nowrap">
-                                              <button onClick={() => { setAdminTab('wines'); setEditingWine(wine); }} className="text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-blue-100">
-                                                  <Edit2 size={14}/> Rediger
-                                              </button>
-                                          </td>
-                                      </tr>
-                                  );
-                              })}
-                          </tbody>
+                          <tbody className="divide-y divide-gray-200 bg-white">
+    {log.details.map((detail, idx) => {
+        // 1. Vi runder de skøre decimaler af (0.6000000001 -> 0.6)
+        const cleanDeducted = Math.round(parseFloat(detail.deducted) * 10) / 10;
+        const cleanNewStock = Math.round(parseFloat(detail.newStock) * 10) / 10;
+        
+        // 2. Vi tjekker om det var et retursalg på kassen (hvis tallet er under 0)
+        const isRefund = cleanDeducted < 0; 
+        
+        return (
+            <tr key={idx} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
+                <td className="px-4 py-3 font-mono text-gray-500">{detail.plu || detail.sku}</td>
+                <td className="px-4 py-3">
+                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium border border-gray-200">
+                        {detail.type}
+                    </span>
+                </td>
+                {/* Her skifter vi farve og fortegn, hvis det er en returvare */}
+                <td className={`px-4 py-3 text-right font-bold ${isRefund ? 'text-green-600' : 'text-red-600'}`}>
+                    {isRefund ? '+' : '-'}{Math.abs(cleanDeducted).toString().replace('.', ',')}
+                </td>
+                <td className="px-4 py-3 text-right font-bold text-gray-900">
+                    {cleanNewStock.toString().replace('.', ',')}
+                </td>
+            </tr>
+        );
+    })}
+</tbody>
                       </table>
                   </div>
               </div>
