@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Tvinger Vercel til ALDRIG at cache denne side!
+export const dynamic = 'force-dynamic';
+
 async function getNemposToken() {
   const loginRes = await fetch('https://api.nempos.dk/api/v1/login', {
     method: 'POST',
@@ -23,12 +26,7 @@ async function getNemposToken() {
 
 export async function GET(req) {
   try {
-    console.log('--- STARTER DIAGNOSE ---');
-    console.log('Tjekker miljøvariabler...');
-    console.log('Company UUID findes:', !!process.env.NEMPOS_COMPANY_UUID);
-    
     const activeToken = await getNemposToken();
-    console.log('Fik adgangstoken fra NemPOS: JA');
     
     const nemposHeaders = {
       'Authorization': `Bearer ${activeToken}`,
@@ -40,19 +38,18 @@ export async function GET(req) {
     };
 
     const listUrl = `https://api.nempos.dk/api/v1/orders/filtered?page=1&company_uuid=${process.env.NEMPOS_COMPANY_UUID}`;
-    console.log(`Kalder URL: ${listUrl}`);
     
     const ordersRes = await fetch(listUrl, { headers: nemposHeaders });
     const ordersData = await ordersRes.json();
 
-    console.log('--- RAW NEMPOS SVAR ---');
-    console.log(JSON.stringify(ordersData).substring(0, 800)); 
-    console.log('-----------------------');
-
-    return NextResponse.json({ success: true, message: 'Se Vercel log for svar' });
+    // Vi returnerer NemPOS' svar DIREKTE på skærmen, så du ikke skal lede i logs!
+    return NextResponse.json({ 
+      success: true, 
+      message: "Her er hvad NemPOS rent faktisk svarer scriptet:",
+      nempos_svar: ordersData 
+    });
 
   } catch (error) {
-    console.error('Kritisk fejl:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
