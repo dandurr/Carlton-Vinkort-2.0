@@ -1,11 +1,10 @@
 import { app, auth } from '@/lib/firebase';
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, addDoc } from 'firebase/firestore/lite';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, addDoc, getDoc } from 'firebase/firestore/lite';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
 
 const dbLite = getFirestore(app);
 
-// Tvinger Vercel til aldrig at cache denne fil
 export const dynamic = 'force-dynamic';
 
 async function getNemposToken() {
@@ -28,7 +27,6 @@ async function getNemposToken() {
 }
 
 export async function GET(req) {
-  // 1. Sikkerhedstjek (Kun Vercel Cron må køre dette)
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -36,8 +34,6 @@ export async function GET(req) {
 
   try {
     console.log('--- STARTER SYNKRONISERING ---');
-    
-    // 2. Log ind
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
     const activeToken = await getNemposToken();
     
@@ -48,26 +44,19 @@ export async function GET(req) {
       'Company-Uuid': process.env.NEMPOS_COMPANY_UUID
     };
 
-    // Kigger 72 timer tilbage for at fange alle test-køb. 
-    // Når alt kører perfekt, kan du rette '72' til '26'.
-    const timeLimit = new Date(Date.now() - 72 * 60 * 60 * 1000); 
+    // Vi kan nu trygt kigge 48 timer tilbage, fordi huskebogen forhindrer dobbelt-træk!
+    const timeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000); 
     const updatedWines = [];
     const unmatchedPLUs = [];
     
     let page = 1;
     let keepFetching = true;
 
-    // 3. Hent ordrer side for side (max 5 sider)
     while (keepFetching && page <= 5) {
       console.log(`Henter side ${page} fra NemPOS...`);
       
-      // BEMÆRK: Vi bruger POST til listen!
       const listUrl = `https://api.nempos.dk/api/v1/orders/filtered?company_uuid=${process.env.NEMPOS_COMPANY_UUID}&page=${page}`;
-      const ordersRes = await fetch(listUrl, { 
-        method: 'POST', 
-        headers: nemposHeaders,
-        body: JSON.stringify({}) 
-      });
+      const ordersRes = await fetch(listUrl, { method: 'POST', headers: nemposHeaders, body: JSON.stringify({}) });
       const ordersData = await ordersRes.json();
 
       if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) {
@@ -75,23 +64,33 @@ export async function GET(req) {
           break; 
       }
 
-      const ordersToProcess = [];
+      // Tjekker datoer
+      const ordersInTimeframe = [];
       for (const order of ordersData.orders) {
         if (order.status !== 'completed') continue;
-
         const orderDate = new Date(order.created_at);
-        if (orderDate < timeLimit) {
-          continue; 
+        if (orderDate >= timeLimit) {
+          ordersInTimeframe.push(order);
         }
-        ordersToProcess.push(order);
       }
 
-      console.log(`Fandt ${ordersToProcess.length} nye/gyldige ordrer på side ${page}.`);
+      // Tjekker "Huskebogen" (Er ordren allerede behandlet før?)
+      const ordersToProcess = [];
+      for (const order of ordersInTimeframe) {
+        const orderDocRef = doc(dbLite, 'processed_orders', order.uuid);
+        const orderDocSnap = await getDoc(orderDocRef);
+        
+        if (!orderDocSnap.exists()) {
+          ordersToProcess.push(order);
+        } else {
+          console.log(`⏳ Skipper ordre #${order.invoice_number || 'X'} - Allerede behandlet.`);
+        }
+      }
 
-      // 4. Hent detaljer for de gyldige ordrer
+      console.log(`Fandt ${ordersToProcess.length} helt nye ordrer på side ${page}, som ikke er set før.`);
+
       if (ordersToProcess.length > 0) {
           const detailPromises = ordersToProcess.map(order => {
-            // BEMÆRK: Vi bruger GET + admin parameteren her!
             const detailUrl = `https://api.nempos.dk/api/v1/orders/${order.uuid}?company_uuid=${process.env.NEMPOS_COMPANY_UUID}&admin_order_details_request=1`;
             return fetch(detailUrl, { method: 'GET', headers: nemposHeaders }).then(res => res.json());
           });
@@ -101,18 +100,16 @@ export async function GET(req) {
           for (const detailData of allDetails) {
             if (!detailData.order || !detailData.order.order_lines) continue;
 
+            let hasDeductedSomething = false;
+
             for (const line of detailData.order.order_lines) {
               const plu = line.sellable?.plu || line.plu;
 
               if (plu) {
-                const isGlass = line.slaves?.some(slave => 
-                  slave.product_name && slave.product_name.toLowerCase().includes('glas')
-                );
-
+                const isGlass = line.slaves?.some(slave => slave.product_name && slave.product_name.toLowerCase().includes('glas'));
                 const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
                 const pluString = String(plu).trim();
 
-                // 5. Slå op i Firebase og træk fra
                 const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
                 const wineQuery = await getDocs(q);
 
@@ -122,15 +119,12 @@ export async function GET(req) {
                   
                   const currentStock = parseFloat(wineDoc.data().stockCount) || 0;
                   const newStock = currentStock - deductionAmount;
-                  const isNowSoldOut = newStock <= 0;
 
-                  const publicWineUpdate = { 
+                  await setDoc(doc(dbLite, 'wines', firebaseId), { 
                       stockCount: newStock,
+                      isSoldOut: newStock <= 0,
                       updatedAt: new Date().toISOString() 
-                  };
-                  if (isNowSoldOut) publicWineUpdate.isSoldOut = true;
-
-                  await setDoc(doc(dbLite, 'wines', firebaseId), publicWineUpdate, { merge: true });
+                  }, { merge: true });
 
                   updatedWines.push({ 
                     name: line.product_name, 
@@ -140,21 +134,26 @@ export async function GET(req) {
                     type: isGlass ? 'Glas' : 'Flaske'
                   });
                   console.log(`✅ TRUKKET FRA LAGER: ${line.product_name} (PLU: ${pluString})`);
+                  hasDeductedSomething = true;
                 } else {
-                  unmatchedPLUs.push({
-                    name: line.product_name,
-                    plu: pluString,
-                    orderDate: detailData.order.created_at
-                  });
-                  console.log(`🕵️ SLADRHANK: PLU ${pluString} fundet, men findes ikke i Firebase!`);
+                  unmatchedPLUs.push({ name: line.product_name, plu: pluString, orderDate: detailData.order.created_at });
+                  console.log(`🕵️ SLADRHANK: PLU ${pluString} fundet på ordre, men findes ikke i Firebase!`);
                 }
               }
             }
+
+            // Skriv ordren i Huskebogen, uanset om der var vin på den eller ej, 
+            // så vi ikke spilder tid på at åbne den igen i morgen!
+            await setDoc(doc(dbLite, 'processed_orders', detailData.order.uuid), {
+              processedAt: new Date().toISOString(),
+              invoice_number: detailData.order.invoice_number || 'X',
+              containedWine: hasDeductedSomething
+            });
           }
       }
       
-      // Hvis vi sorterede alle ordrer fra på denne side (fordi de var for gamle), stopper vi
-      if (ordersToProcess.length === 0) {
+      // Stop hvis der ikke var flere ordrer indenfor tidsgrænsen på siden
+      if (ordersInTimeframe.length === 0) {
           keepFetching = false;
       } else {
           page++;
@@ -163,15 +162,16 @@ export async function GET(req) {
 
     console.log(`--- SYNKRONISERING FÆRDIG ---`);
 
-    // 6. Gem log i Firebase
-    await addDoc(collection(dbLite, 'sync_logs'), {
-      createdAt: new Date().toISOString(),
-      status: 'success',
-      processedCount: updatedWines.length,
-      details: updatedWines,
-      unmatchedCount: unmatchedPLUs.length,
-      unmatchedDetails: unmatchedPLUs
-    });
+    if (updatedWines.length > 0 || unmatchedPLUs.length > 0) {
+      await addDoc(collection(dbLite, 'sync_logs'), {
+        createdAt: new Date().toISOString(),
+        status: 'success',
+        processedCount: updatedWines.length,
+        details: updatedWines,
+        unmatchedCount: unmatchedPLUs.length,
+        unmatchedDetails: unmatchedPLUs
+      });
+    }
 
     return NextResponse.json({ success: true, processed: updatedWines.length, unmatched: unmatchedPLUs.length });
 

@@ -380,74 +380,137 @@ export default function AdminVinkort() {
           )}
 
           {/* TAB: SYNKRONISERING LOGS */}
-          {adminTab === 'sync' && (
-              <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
-                  <div className="flex justify-between items-center mb-6 border-b pb-4">
-                      <div className="flex items-center gap-3">
-                          <Activity className="text-[#991b1b]" size={28}/>
-                          <h2 className="text-2xl font-bold font-serif text-gray-900">NemPOS Integration</h2>
-                      </div>
-                      <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">CRON Job Logs</span>
-                  </div>
-                  
-                  {syncLogs.length === 0 ? (
-                      <p className="text-gray-500 italic py-10 text-center">Ingen kørsler registreret endnu.</p>
-                  ) : (
-                      <div className="space-y-4">
-                          {syncLogs.map(log => {
-                              const isSuccess = log.status === 'success';
-                              const isExpanded = expandedSync === log.id;
-                              
-                              return (
-                                  <div key={log.id} className={`border p-5 rounded-xl transition-all ${isSuccess ? 'border-gray-200 bg-white' : 'border-red-200 bg-red-50'}`}>
-                                      <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedSync(isExpanded ? null : log.id)}>
-                                          <div className="flex items-center gap-4">
-                                              <div className={`w-3 h-3 rounded-full ${isSuccess ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                              <div>
-                                                  <div className="font-bold text-gray-900">{new Date(log.createdAt).toLocaleString('da-DK', { dateStyle: 'full', timeStyle: 'short' })}</div>
-                                                  <div className="text-sm text-gray-500">
-                                                      {isSuccess ? `Synkroniseret: ${log.processedCount} varer opdateret` : `Fejl: ${log.error}`}
-                                                  </div>
-                                              </div>
-                                          </div>
-                                          {isSuccess && log.processedCount > 0 && (
-                                              <button className="text-sm font-medium text-[#991b1b] bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors">
-                                                  {isExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
-                                              </button>
-                                          )}
-                                      </div>
-                                      
-                                      {isExpanded && isSuccess && log.details && log.details.length > 0 && (
-                                          <div className="mt-4 pt-4 border-t border-gray-100">
-                                              <table className="w-full text-left text-sm">
-                                                  <thead className="text-gray-400 font-bold uppercase tracking-wider text-xs">
-                                                      <tr>
-                                                          <th className="pb-2">Varenavn (NemPOS)</th>
-                                                          <th className="pb-2">PLU</th>
-                                                          <th className="pb-2">Type</th>
-                                                          <th className="pb-2 text-right">Fratrukket</th>
-                                                      </tr>
-                                                  </thead>
-                                                  <tbody className="divide-y divide-gray-50">
-                                                      {log.details.map((detail, idx) => (
-                                                          <tr key={idx}>
-                                                              <td className="py-2 text-gray-800">{detail.name}</td>
-                                                              <td className="py-2 font-mono text-gray-500">{detail.plu || detail.sku}</td>
-                                                              <td className="py-2"><span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">{detail.type}</span></td>
-                                                              <td className="py-2 text-right font-bold text-gray-900">-{detail.deducted}</td>
-                                                          </tr>
-                                                      ))}
-                                                  </tbody>
-                                              </table>
-                                          </div>
-                                      )}
-                                  </div>
-                              );
-                          })}
-                      </div>
-                  )}
-              </div>
-          )}
+{adminTab === 'sync' && (
+    <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <div className="flex items-center gap-3">
+                <Activity className="text-[#991b1b]" size={28}/>
+                <h2 className="text-2xl font-bold font-serif text-gray-900">NemPOS Integration</h2>
+            </div>
+            <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">CRON Job Logs</span>
+        </div>
+        
+        {syncLogs.length === 0 ? (
+            <p className="text-gray-500 italic py-10 text-center">Ingen kørsler registreret endnu.</p>
+        ) : (
+            <div className="space-y-4">
+                {syncLogs.map(log => {
+                    const isSuccess = log.status === 'success';
+                    const isExpanded = expandedSync === log.id;
+                    const hasDetails = log.processedCount > 0 || log.unmatchedCount > 0;
+                    
+                    return (
+                        <div key={log.id} className={`border p-5 rounded-xl transition-all ${!isSuccess ? 'border-red-200 bg-red-50' : log.unmatchedCount > 0 ? 'border-amber-200 bg-amber-50/30' : 'border-gray-200 bg-white'}`}>
+                            <div className="flex justify-between items-center cursor-pointer" onClick={() => hasDetails && setExpandedSync(isExpanded ? null : log.id)}>
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-3 h-3 rounded-full ${!isSuccess ? 'bg-red-500' : log.unmatchedCount > 0 ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+                                    <div>
+                                        <div className="font-bold text-gray-900">{new Date(log.createdAt).toLocaleString('da-DK', { dateStyle: 'full', timeStyle: 'short' })}</div>
+                                        <div className="text-sm text-gray-500 mt-0.5">
+                                            {!isSuccess ? (
+                                                <span className="text-red-600 font-medium">Fejl: {log.error}</span>
+                                            ) : (
+                                                <span className="flex items-center gap-2">
+                                                    <span>{log.processedCount} {log.processedCount === 1 ? 'vare' : 'varer'} opdateret</span>
+                                                    {log.unmatchedCount > 0 && (
+                                                        <span className="text-amber-700 font-medium bg-amber-100 px-2 py-0.5 rounded text-xs">
+                                                            {log.unmatchedCount} ukendt PLU fundet
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                {isSuccess && hasDetails && (
+                                    <button className="text-sm font-medium text-[#991b1b] bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors border border-gray-200">
+                                        {isExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {isExpanded && isSuccess && hasDetails && (
+                                <div className="mt-5 pt-5 border-t border-gray-100 space-y-6">
+                                    
+                                    {/* SUCCES TABEL - Varer opdateret */}
+                                    {log.details && log.details.length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                Opdateret Lager
+                                            </h4>
+                                            <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead className="bg-gray-100 text-gray-500 font-bold uppercase tracking-wider text-xs">
+                                                        <tr>
+                                                            <th className="px-4 py-3">Varenavn (NemPOS)</th>
+                                                            <th className="px-4 py-3">PLU</th>
+                                                            <th className="px-4 py-3">Type</th>
+                                                            <th className="px-4 py-3 text-right">Fratrukket</th>
+                                                            <th className="px-4 py-3 text-right">Nyt Lager</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200 bg-white">
+                                                        {log.details.map((detail, idx) => (
+                                                            <tr key={idx} className="hover:bg-gray-50">
+                                                                <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
+                                                                <td className="px-4 py-3 font-mono text-gray-500">{detail.plu || detail.sku}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium border border-gray-200">
+                                                                        {detail.type}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-right font-bold text-red-600">-{detail.deducted}</td>
+                                                                <td className="px-4 py-3 text-right font-bold text-gray-900">{detail.newStock}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* SLADRHANK TABEL - Ukendte PLU'er */}
+                                    {log.unmatchedDetails && log.unmatchedDetails.length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-bold text-amber-700 mb-3 flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                                                Sladrhank: Solgt på kassen, men mangler i Firebase
+                                            </h4>
+                                            <div className="bg-amber-50 rounded-lg overflow-hidden border border-amber-200">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead className="bg-amber-100 text-amber-700 font-bold uppercase tracking-wider text-xs">
+                                                        <tr>
+                                                            <th className="px-4 py-3">Varenavn (NemPOS)</th>
+                                                            <th className="px-4 py-3">PLU (Mangler)</th>
+                                                            <th className="px-4 py-3 text-right">Salgsdato</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-amber-100 bg-white">
+                                                        {log.unmatchedDetails.map((detail, idx) => (
+                                                            <tr key={idx} className="hover:bg-amber-50/50">
+                                                                <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
+                                                                <td className="px-4 py-3 font-mono font-bold text-amber-600">{detail.plu}</td>
+                                                                <td className="px-4 py-3 text-right text-gray-500">
+                                                                    {new Date(detail.orderDate).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        )}
+    </div>
+)}
 
           {/* TAB: FEEDBACK */}
           {adminTab === 'feedback' && (
