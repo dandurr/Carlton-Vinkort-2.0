@@ -13,7 +13,6 @@ async function getNemposToken() {
       'Content-Type': 'application/json;charset=UTF-8',
       'Company-Uuid': process.env.NEMPOS_COMPANY_UUID,
       'Origin': 'https://app.nempos.dk',
-      'Referer': 'https://app.nempos.dk/',
       'User-Agent': 'Mozilla/5.0'
     },
     body: JSON.stringify({
@@ -34,6 +33,7 @@ export async function GET(req) {
   }
 
   try {
+    console.log('--- STARTER SYNKRONISERING ---');
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
     const activeToken = await getNemposToken();
     
@@ -46,21 +46,28 @@ export async function GET(req) {
       'User-Agent': 'Mozilla/5.0'
     };
 
-  
-    // Kigger 26 timer tilbage - perfekt og sikkert til et dagligt CRON-job!
-const timeLimit = new Date(Date.now() - 26 * 60 * 60 * 1000); 
+    // Vi sætter den til 48 timer for at være 100% sikre på at fange test-køb.
+    const timeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000); 
     const updatedWines = [];
     const unmatchedPLUs = [];
     
     let page = 1;
-    let keepFetching = true;
 
-    while (keepFetching && page <= 5) {
-      // Tilføjet company_uuid direkte i URL'en, ligesom i din Postman
-      const ordersRes = await fetch(`https://api.nempos.dk/api/v1/orders/filtered?page=${page}&company_uuid=${process.env.NEMPOS_COMPANY_UUID}`, { headers: nemposHeaders });
+    // Vi tvinger den til at kigge 5 sider igennem, uanset hvad!
+    while (page <= 5) {
+      console.log(`Henter side ${page} fra NemPOS...`);
+      // BEMÆRK: Vi har fjernet "/filtered" og bruger det rene "/orders"
+      const listUrl = `https://api.nempos.dk/api/v1/orders?page=${page}&company_uuid=${process.env.NEMPOS_COMPANY_UUID}`;
+      
+      const ordersRes = await fetch(listUrl, { headers: nemposHeaders });
       const ordersData = await ordersRes.json();
 
-      if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) break; 
+      if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) {
+          console.log(`Ingen ordrer fundet på side ${page}. Afbryder søgning.`);
+          break; 
+      }
+
+      console.log(`Succes! Fandt ${ordersData.orders.length} ordrer på side ${page}. Nyeste ordre er fra: ${ordersData.orders[0].created_at}`);
 
       const ordersToProcess = [];
       for (const order of ordersData.orders) {
@@ -68,77 +75,81 @@ const timeLimit = new Date(Date.now() - 26 * 60 * 60 * 1000);
 
         const orderDate = new Date(order.created_at);
         if (orderDate < timeLimit) {
-          continue; 
+          continue; // Ordren er for gammel, gå til næste.
         }
         ordersToProcess.push(order);
       }
 
-      const detailPromises = ordersToProcess.map(order => 
-        fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}?company_uuid=${process.env.NEMPOS_COMPANY_UUID}`, { headers: nemposHeaders })
-          .then(res => res.json())
-      );
-      
-      const allDetails = await Promise.all(detailPromises);
+      console.log(`Fandt ${ordersToProcess.length} gyldige/nye ordrer på side ${page}, som vi nu klikker ind på.`);
 
-      for (const detailData of allDetails) {
-        if (!detailData.order || !detailData.order.order_lines) continue;
+      // Hvis der ER nye ordrer, så henter vi detaljerne (dette var det API kald, du manglede at se!)
+      if (ordersToProcess.length > 0) {
+          const detailPromises = ordersToProcess.map(order => 
+            fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}?company_uuid=${process.env.NEMPOS_COMPANY_UUID}`, { headers: nemposHeaders })
+              .then(res => res.json())
+          );
+          
+          const allDetails = await Promise.all(detailPromises);
 
-        for (const line of detailData.order.order_lines) {
-          const plu = line.sellable?.plu || line.plu;
+          for (const detailData of allDetails) {
+            if (!detailData.order || !detailData.order.order_lines) continue;
 
-          if (plu) {
-            const isGlass = line.slaves?.some(slave => 
-              slave.product_name && slave.product_name.toLowerCase().includes('glas')
-            );
+            for (const line of detailData.order.order_lines) {
+              const plu = line.sellable?.plu || line.plu;
 
-            const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
-            const pluString = String(plu).trim();
+              if (plu) {
+                const isGlass = line.slaves?.some(slave => 
+                  slave.product_name && slave.product_name.toLowerCase().includes('glas')
+                );
 
-            const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
-            const wineQuery = await getDocs(q);
+                const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
+                const pluString = String(plu).trim();
 
-            if (!wineQuery.empty) {
-              const wineDoc = wineQuery.docs[0];
-              const firebaseId = wineDoc.id;
-              
-              // Hent nuværende lager direkte fra hoved-vinen
-              const currentStock = parseFloat(wineDoc.data().stockCount) || 0;
-              const newStock = currentStock - deductionAmount;
-              const isNowSoldOut = newStock <= 0;
+                const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
+                const wineQuery = await getDocs(q);
 
-              // Gemmer kun i "wines"
-              const publicWineUpdate = { 
-                  stockCount: newStock,
-                  updatedAt: new Date().toISOString() 
-              };
-              if (isNowSoldOut) publicWineUpdate.isSoldOut = true;
+                if (!wineQuery.empty) {
+                  const wineDoc = wineQuery.docs[0];
+                  const firebaseId = wineDoc.id;
+                  
+                  const currentStock = parseFloat(wineDoc.data().stockCount) || 0;
+                  const newStock = currentStock - deductionAmount;
+                  const isNowSoldOut = newStock <= 0;
 
-              await setDoc(doc(dbLite, 'wines', firebaseId), publicWineUpdate, { merge: true });
+                  const publicWineUpdate = { 
+                      stockCount: newStock,
+                      updatedAt: new Date().toISOString() 
+                  };
+                  if (isNowSoldOut) publicWineUpdate.isSoldOut = true;
 
-              updatedWines.push({ 
-                name: line.product_name, 
-                plu: pluString, 
-                deducted: deductionAmount,
-                newStock: newStock,
-                type: isGlass ? 'Glas' : 'Flaske'
-              });
-            } else {
-              unmatchedPLUs.push({
-                name: line.product_name,
-                plu: pluString,
-                orderDate: detailData.order.created_at
-              });
+                  await setDoc(doc(dbLite, 'wines', firebaseId), publicWineUpdate, { merge: true });
+
+                  updatedWines.push({ 
+                    name: line.product_name, 
+                    plu: pluString, 
+                    deducted: deductionAmount,
+                    newStock: newStock,
+                    type: isGlass ? 'Glas' : 'Flaske'
+                  });
+                  console.log(`TRUKKET FRA LAGER: ${line.product_name} (PLU: ${pluString}) - Nyt lager: ${newStock}`);
+                } else {
+                  unmatchedPLUs.push({
+                    name: line.product_name,
+                    plu: pluString,
+                    orderDate: detailData.order.created_at
+                  });
+                  console.log(`SLADRHANK: Fandt PLU ${pluString} på bon, men den findes ikke i Firebase!`);
+                }
+              }
             }
           }
-        }
       }
       
-      if (ordersToProcess.length === 0) {
-          keepFetching = false;
-      } else {
-          page++;
-      }
+      page++;
     }
+
+    console.log(`--- SYNKRONISERING FÆRDIG ---`);
+    console.log(`Opdaterede varer: ${updatedWines.length}. Unmatched PLU'er: ${unmatchedPLUs.length}.`);
 
     await addDoc(collection(dbLite, 'sync_logs'), {
       createdAt: new Date().toISOString(),
@@ -152,6 +163,7 @@ const timeLimit = new Date(Date.now() - 26 * 60 * 60 * 1000);
     return NextResponse.json({ success: true, processed: updatedWines.length, unmatched: unmatchedPLUs.length });
 
   } catch (error) {
+    console.error('Kritisk fejl:', error.message);
     try { await addDoc(collection(dbLite, 'sync_logs'), { createdAt: new Date().toISOString(), status: 'error', error: error.message }); } catch (e) {}
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
