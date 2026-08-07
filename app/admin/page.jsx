@@ -469,7 +469,9 @@ export default function AdminVinkort() {
                                                                         {detail.type}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-4 py-3 text-right font-bold text-red-600">-{detail.deducted}</td>
+                                                                <td className={`px-4 py-3 text-right font-bold ${detail.deducted < 0 ? 'text-green-600' : 'text-red-600'}`}>
+    {detail.deducted < 0 ? '+' : '-'}{Math.abs(detail.deducted).toString().replace('.', ',')}
+</td>
                                                                 <td className="px-4 py-3 text-right font-bold text-gray-900">{detail.newStock}</td>
                                                             </tr>
                                                         ))}

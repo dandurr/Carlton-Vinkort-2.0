@@ -107,7 +107,8 @@ export async function GET(req) {
 
               if (plu) {
                 const isGlass = line.slaves?.some(slave => slave.product_name && slave.product_name.toLowerCase().includes('glas'));
-                const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
+                const rawDeduction = isGlass ? (line.quantity * 0.2) : line.quantity;
+const deductionAmount = Math.round(rawDeduction * 10) / 10;
                 const pluString = String(plu).trim();
 
                 const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
