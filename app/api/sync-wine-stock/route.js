@@ -46,8 +46,9 @@ export async function GET(req) {
       'User-Agent': 'Mozilla/5.0'
     };
 
-    // Kigger hele 7 dage tilbage for at fange din test-champagne!
-    const timeLimit = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); 
+  
+    // Kigger 26 timer tilbage - perfekt og sikkert til et dagligt CRON-job!
+const timeLimit = new Date(Date.now() - 26 * 60 * 60 * 1000); 
     const updatedWines = [];
     const unmatchedPLUs = [];
     
