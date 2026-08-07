@@ -1,5 +1,5 @@
 import { app, auth } from '@/lib/firebase';
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, getDoc, addDoc } from 'firebase/firestore/lite';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, addDoc } from 'firebase/firestore/lite';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { NextResponse } from 'next/server';
 
@@ -14,7 +14,7 @@ async function getNemposToken() {
       'Company-Uuid': process.env.NEMPOS_COMPANY_UUID,
       'Origin': 'https://app.nempos.dk',
       'Referer': 'https://app.nempos.dk/',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
+      'User-Agent': 'Mozilla/5.0'
     },
     body: JSON.stringify({
       client: process.env.NEMPOS_EMAIL,
@@ -34,8 +34,6 @@ export async function GET(req) {
   }
 
   try {
-    console.log('Starter natsynkronisering af vinlager...');
-
     await signInWithEmailAndPassword(auth, process.env.FIREBASE_ADMIN_EMAIL, process.env.FIREBASE_ADMIN_PASSWORD);
     const activeToken = await getNemposToken();
     
@@ -45,20 +43,20 @@ export async function GET(req) {
       'Content-Type': 'application/json',
       'Company-Uuid': process.env.NEMPOS_COMPANY_UUID,
       'Origin': 'https://app.nempos.dk',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
+      'User-Agent': 'Mozilla/5.0'
     };
 
-    // Kigger 3 dage (72 timer) tilbage for at fange test-ordrer
-    const timeLimit = new Date(Date.now() - 72 * 60 * 60 * 1000); 
+    // Kigger hele 7 dage tilbage for at fange din test-champagne!
+    const timeLimit = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); 
     const updatedWines = [];
-    const unmatchedPLUs = []; // Sladrhanken!
+    const unmatchedPLUs = [];
     
     let page = 1;
     let keepFetching = true;
 
-    // Henter max 5 sider så vi ikke dræber serveren
     while (keepFetching && page <= 5) {
-      const ordersRes = await fetch(`https://api.nempos.dk/api/v1/orders/filtered?page=${page}`, { headers: nemposHeaders });
+      // Tilføjet company_uuid direkte i URL'en, ligesom i din Postman
+      const ordersRes = await fetch(`https://api.nempos.dk/api/v1/orders/filtered?page=${page}&company_uuid=${process.env.NEMPOS_COMPANY_UUID}`, { headers: nemposHeaders });
       const ordersData = await ordersRes.json();
 
       if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) break; 
@@ -69,15 +67,13 @@ export async function GET(req) {
 
         const orderDate = new Date(order.created_at);
         if (orderDate < timeLimit) {
-          // I stedet for at stoppe alt, springer vi bare denne ordre over
           continue; 
         }
         ordersToProcess.push(order);
       }
 
-      // Hent bon-detaljer (klik ind på hver ordre for at se varerne)
       const detailPromises = ordersToProcess.map(order => 
-        fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}`, { headers: nemposHeaders })
+        fetch(`https://api.nempos.dk/api/v1/orders/${order.uuid}?company_uuid=${process.env.NEMPOS_COMPANY_UUID}`, { headers: nemposHeaders })
           .then(res => res.json())
       );
       
@@ -95,26 +91,25 @@ export async function GET(req) {
             );
 
             const deductionAmount = isGlass ? (line.quantity * 0.2) : line.quantity;
-            const pluString = String(plu).trim(); // Sikrer tekstformat uden mellemrum
+            const pluString = String(plu).trim();
 
             const q = query(collection(dbLite, 'wines'), where('sku', '==', pluString));
             const wineQuery = await getDocs(q);
 
             if (!wineQuery.empty) {
-              const firebaseId = wineQuery.docs[0].id;
-              const sensitiveRef = doc(dbLite, 'wines_sensitive', firebaseId);
+              const wineDoc = wineQuery.docs[0];
+              const firebaseId = wineDoc.id;
               
-              const sensitiveSnap = await getDoc(sensitiveRef);
-              const currentStock = sensitiveSnap.exists() ? (sensitiveSnap.data().stockCount || 0) : 0;
+              // Hent nuværende lager direkte fra hoved-vinen
+              const currentStock = parseFloat(wineDoc.data().stockCount) || 0;
               const newStock = currentStock - deductionAmount;
-              
               const isNowSoldOut = newStock <= 0;
 
-              // Trækker fra lager
-              await setDoc(sensitiveRef, { stockCount: newStock }, { merge: true });
-
-              // Opdaterer status på vinkortet automatisk
-              const publicWineUpdate = { updatedAt: new Date().toISOString() };
+              // Gemmer kun i "wines"
+              const publicWineUpdate = { 
+                  stockCount: newStock,
+                  updatedAt: new Date().toISOString() 
+              };
               if (isNowSoldOut) publicWineUpdate.isSoldOut = true;
 
               await setDoc(doc(dbLite, 'wines', firebaseId), publicWineUpdate, { merge: true });
@@ -124,11 +119,9 @@ export async function GET(req) {
                 plu: pluString, 
                 deducted: deductionAmount,
                 newStock: newStock,
-                autoSoldOut: isNowSoldOut,
                 type: isGlass ? 'Glas' : 'Flaske'
               });
             } else {
-              // SLADRHANKEN: PLU fundet i NemPOS, men findes ikke i Firebase!
               unmatchedPLUs.push({
                 name: line.product_name,
                 plu: pluString,
@@ -139,7 +132,6 @@ export async function GET(req) {
         }
       }
       
-      // Hvis vi ikke fandt nogen nye ordrer at behandle på denne side, så stopper vi
       if (ordersToProcess.length === 0) {
           keepFetching = false;
       } else {
@@ -147,7 +139,6 @@ export async function GET(req) {
       }
     }
 
-    // Gem kvittering + sladrhank i databasen
     await addDoc(collection(dbLite, 'sync_logs'), {
       createdAt: new Date().toISOString(),
       status: 'success',
@@ -157,22 +148,10 @@ export async function GET(req) {
       unmatchedDetails: unmatchedPLUs
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      processed: updatedWines.length, 
-      unmatched: unmatchedPLUs.length 
-    });
+    return NextResponse.json({ success: true, processed: updatedWines.length, unmatched: unmatchedPLUs.length });
 
   } catch (error) {
-    console.error('Fejl under synkronisering:', error);
-    try {
-        await addDoc(collection(dbLite, 'sync_logs'), {
-          createdAt: new Date().toISOString(),
-          status: 'error',
-          error: error.message
-        });
-    } catch (logError) {}
-    
+    try { await addDoc(collection(dbLite, 'sync_logs'), { createdAt: new Date().toISOString(), status: 'error', error: error.message }); } catch (e) {}
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
