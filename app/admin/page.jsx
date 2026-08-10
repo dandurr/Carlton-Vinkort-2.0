@@ -35,8 +35,7 @@ export default function AdminVinkort() {
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
   
-  const [publicWines, setPublicWines] = useState([]);
-  const [sensitiveWines, setSensitiveWines] = useState({});
+  const [wines, setWines] = useState([]);
   const [filters, setFilters] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [syncLogs, setSyncLogs] = useState([]);
@@ -84,16 +83,11 @@ export default function AdminVinkort() {
         if (docSnap.exists() && docSnap.data().filters) setFilters(docSnap.data().filters);
     });
 
-    const unsubPublic = onSnapshot(collection(db, 'wines'), (snapshot) => {
+    // ÉN samlet kilde til alle vin-data (wines kollektionen)
+    const unsubWines = onSnapshot(collection(db, 'wines'), (snapshot) => {
       const loadedWines = [];
       snapshot.forEach(doc => { if (doc.id !== 'config') loadedWines.push({ id: doc.id, ...doc.data() }); });
-      setPublicWines(loadedWines);
-    });
-
-    const unsubSensitive = onSnapshot(collection(db, 'wines_sensitive'), (snapshot) => {
-        const sensitiveData = {};
-        snapshot.docs.forEach(doc => { sensitiveData[doc.id] = doc.data(); });
-        setSensitiveWines(sensitiveData);
+      setWines(loadedWines);
     });
 
     const unsubFeedback = onSnapshot(collection(db, 'feedback'), (snapshot) => {
@@ -110,7 +104,7 @@ export default function AdminVinkort() {
         setSyncLogs(logs);
     });
 
-    return () => { unsubConfig(); unsubPublic(); unsubSensitive(); unsubFeedback(); unsubSync(); };
+    return () => { unsubConfig(); unsubWines(); unsubFeedback(); unsubSync(); };
   }, [user]);
 
   useEffect(() => {
@@ -120,13 +114,6 @@ export default function AdminVinkort() {
         setMathState({ price: 0, purchasePrice: 0 });
     }
   }, [editingWine, showAddForm]);
-
-  const wines = useMemo(() => {
-      return publicWines.map(w => {
-          const sensitive = sensitiveWines[w.id] || {};
-          return { ...w, purchasePrice: sensitive.purchasePrice ?? w.purchasePrice, stockCount: sensitive.stockCount ?? w.stockCount, wineCabinet: sensitive.wineCabinet ?? w.wineCabinet, shelf: sensitive.shelf ?? w.shelf };
-      });
-  }, [publicWines, sensitiveWines]);
 
   const historyWines = useMemo(() => {
       return [...wines]
@@ -218,7 +205,8 @@ export default function AdminVinkort() {
     const parsedWineCabinet = data.wineCabinet ? parseInt(data.wineCabinet, 10) : "";
     const parsedShelf = data.shelf ? parseInt(data.shelf, 10) : "";
 
-    const publicData = {
+    // Gemmer alt (både offentligt og privat) i ét enkelt dokument
+    const wineData = {
         producer: data.producer || "", name: data.name || "", year: data.year || "", type: data.type || "",
         country: data.country || "", region: data.region || "", classification: data.classification || "",
         price: parseFloat(data.price) || 0, glass_price: data.glass_price || "", size: data.size || "",
@@ -227,19 +215,16 @@ export default function AdminVinkort() {
         grapes: data.grapes || "", pairing: data.pairing || "", facts: data.facts || "",
         carltonsChoice: formData.get('carltonsChoice') === 'on', seasonsChoice: formData.get('seasonsChoice') === 'on',
         isSoldOut: formData.get('isSoldOut') === 'on', updatedAt: timestamp, wineCabinet: parsedWineCabinet, shelf: parsedShelf,
+        purchasePrice: parseFloat(data.purchasePrice) || 0, stockCount: parseFloat(data.stockCount) || 0
     };
-    
-    const sensitiveData = { purchasePrice: parseFloat(data.purchasePrice) || 0, stockCount: parseFloat(data.stockCount) || 0, wineCabinet: parsedWineCabinet, shelf: parsedShelf };
 
     try {
         if (editingWine) {
-            await updateDoc(doc(db, 'wines', editingWine.id), publicData);
-            await setDoc(doc(db, 'wines_sensitive', editingWine.id), sensitiveData, { merge: true });
+            await updateDoc(doc(db, 'wines', editingWine.id), wineData);
             setEditingWine(null);
         } else {
-            publicData.createdAt = timestamp;
-            const docRef = await addDoc(collection(db, 'wines'), publicData);
-            await setDoc(doc(db, 'wines_sensitive', docRef.id), sensitiveData);
+            wineData.createdAt = timestamp;
+            await addDoc(collection(db, 'wines'), wineData);
             e.target.reset(); setMathState({ price: 0, purchasePrice: 0 }); setShowAddForm(false);
         }
     } catch (err) { setAlertDialog({ message: "Fejl ved gemning: " + err.message }); }
@@ -248,15 +233,13 @@ export default function AdminVinkort() {
   const deleteWine = (id) => { 
       setConfirmDialog({
           message: "Er du sikker på, at du vil slette denne vin? Dette kan ikke fortrydes.",
-          onConfirm: async () => { await deleteDoc(doc(db, 'wines', id)); await deleteDoc(doc(db, 'wines_sensitive', id)); }
+          onConfirm: async () => { await deleteDoc(doc(db, 'wines', id)); }
       });
   };
   
   const toggleSoldOut = async (wine) => { await updateDoc(doc(db, 'wines', wine.id), { isSoldOut: !wine.isSoldOut, updatedAt: new Date().toISOString() }); };
-  const updateStock = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { stockCount: parseFloat(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
-  const updatePurchasePrice = async (id, val) => { await setDoc(doc(db, 'wines_sensitive', id), { purchasePrice: parseFloat(val) || 0 }, { merge: true }); await updateDoc(doc(db, 'wines', id), { updatedAt: new Date().toISOString() }); };
-
-  // --- NYT: Direkte opdatering af Salgspris og PLU ---
+  const updateStock = async (id, val) => { await updateDoc(doc(db, 'wines', id), { stockCount: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
+  const updatePurchasePrice = async (id, val) => { await updateDoc(doc(db, 'wines', id), { purchasePrice: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
   const updatePrice = async (id, val) => { await updateDoc(doc(db, 'wines', id), { price: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
   const updateSku = async (id, val) => { await updateDoc(doc(db, 'wines', id), { sku: val.trim(), updatedAt: new Date().toISOString() }); };
 
@@ -355,173 +338,163 @@ export default function AdminVinkort() {
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200 bg-white">
-    {log.details.map((detail, idx) => {
-        // 1. Vi runder de skøre decimaler af (0.6000000001 -> 0.6)
-        const cleanDeducted = Math.round(parseFloat(detail.deducted) * 10) / 10;
-        const cleanNewStock = Math.round(parseFloat(detail.newStock) * 10) / 10;
-        
-        // 2. Vi tjekker om det var et retursalg på kassen (hvis tallet er under 0)
-        const isRefund = cleanDeducted < 0; 
-        
-        return (
-            <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
-                <td className="px-4 py-3 font-mono text-gray-500">{detail.plu || detail.sku}</td>
-                <td className="px-4 py-3">
-                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium border border-gray-200">
-                        {detail.type}
-                    </span>
-                </td>
-                {/* Her skifter vi farve og fortegn, hvis det er en returvare */}
-                <td className={`px-4 py-3 text-right font-bold ${isRefund ? 'text-green-600' : 'text-red-600'}`}>
-                    {isRefund ? '+' : '-'}{Math.abs(cleanDeducted).toString().replace('.', ',')}
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-gray-900">
-                    {cleanNewStock.toString().replace('.', ',')}
-                </td>
-            </tr>
-        );
-    })}
-</tbody>
+                              {historyWines.map(wine => (
+                                  <tr key={wine.id} className="hover:bg-gray-50">
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                          {new Date(wine.updatedAt).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })}
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          <div className="font-bold text-gray-900">{wine.producer}</div>
+                                          <div className="text-gray-500 text-sm">{wine.name} {wine.year ? `- ${wine.year}` : ''}</div>
+                                      </td>
+                                      <td className="px-6 py-4 text-sm text-gray-500">
+                                          Opdateret
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
                       </table>
                   </div>
               </div>
           )}
 
           {/* TAB: SYNKRONISERING LOGS */}
-{adminTab === 'sync' && (
-    <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <div className="flex items-center gap-3">
-                <Activity className="text-[#991b1b]" size={28}/>
-                <h2 className="text-2xl font-bold font-serif text-gray-900">NemPOS Integration</h2>
-            </div>
-            <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">CRON Job Logs</span>
-        </div>
-        
-        {syncLogs.length === 0 ? (
-            <p className="text-gray-500 italic py-10 text-center">Ingen kørsler registreret endnu.</p>
-        ) : (
-            <div className="space-y-4">
-                {syncLogs.map(log => {
-                    const isSuccess = log.status === 'success';
-                    const isExpanded = expandedSync === log.id;
-                    const hasDetails = log.processedCount > 0 || log.unmatchedCount > 0;
-                    
-                    return (
-                        <div key={log.id} className={`border p-5 rounded-xl transition-all ${!isSuccess ? 'border-red-200 bg-red-50' : log.unmatchedCount > 0 ? 'border-amber-200 bg-amber-50/30' : 'border-gray-200 bg-white'}`}>
-                            <div className="flex justify-between items-center cursor-pointer" onClick={() => hasDetails && setExpandedSync(isExpanded ? null : log.id)}>
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-3 h-3 rounded-full ${!isSuccess ? 'bg-red-500' : log.unmatchedCount > 0 ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-                                    <div>
-                                        <div className="font-bold text-gray-900">{new Date(log.createdAt).toLocaleString('da-DK', { dateStyle: 'full', timeStyle: 'short' })}</div>
-                                        <div className="text-sm text-gray-500 mt-0.5">
-                                            {!isSuccess ? (
-                                                <span className="text-red-600 font-medium">Fejl: {log.error}</span>
-                                            ) : (
-                                                <span className="flex items-center gap-2">
-                                                    <span>{log.processedCount} {log.processedCount === 1 ? 'vare' : 'varer'} opdateret</span>
-                                                    {log.unmatchedCount > 0 && (
-                                                        <span className="text-amber-700 font-medium bg-amber-100 px-2 py-0.5 rounded text-xs">
-                                                            {log.unmatchedCount} ukendt PLU fundet
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                {isSuccess && hasDetails && (
-                                    <button className="text-sm font-medium text-[#991b1b] bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors border border-gray-200">
-                                        {isExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
-                                    </button>
-                                )}
-                            </div>
-                            
-                            {isExpanded && isSuccess && hasDetails && (
-                                <div className="mt-5 pt-5 border-t border-gray-100 space-y-6">
-                                    
-                                    {/* SUCCES TABEL - Varer opdateret */}
-                                    {log.details && log.details.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                                Opdateret Lager
-                                            </h4>
-                                            <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
-                                                <table className="w-full text-left text-sm">
-                                                    <thead className="bg-gray-100 text-gray-500 font-bold uppercase tracking-wider text-xs">
-                                                        <tr>
-                                                            <th className="px-4 py-3">Varenavn (NemPOS)</th>
-                                                            <th className="px-4 py-3">PLU</th>
-                                                            <th className="px-4 py-3">Type</th>
-                                                            <th className="px-4 py-3 text-right">Fratrukket</th>
-                                                            <th className="px-4 py-3 text-right">Nyt Lager</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-200 bg-white">
-                                                        {log.details.map((detail, idx) => (
-                                                            <tr key={idx} className="hover:bg-gray-50">
-                                                                <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
-                                                                <td className="px-4 py-3 font-mono text-gray-500">{detail.plu || detail.sku}</td>
-                                                                <td className="px-4 py-3">
-                                                                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium border border-gray-200">
-                                                                        {detail.type}
-                                                                    </span>
-                                                                </td>
-                                                                <td className={`px-4 py-3 text-right font-bold ${detail.deducted < 0 ? 'text-green-600' : 'text-red-600'}`}>
-    {detail.deducted < 0 ? '+' : '-'}{Math.abs(detail.deducted).toString().replace('.', ',')}
-</td>
-                                                                <td className="px-4 py-3 text-right font-bold text-gray-900">{detail.newStock}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    )}
+          {adminTab === 'sync' && (
+              <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
+                  <div className="flex justify-between items-center mb-6 border-b pb-4">
+                      <div className="flex items-center gap-3">
+                          <Activity className="text-[#991b1b]" size={28}/>
+                          <h2 className="text-2xl font-bold font-serif text-gray-900">NemPOS Integration</h2>
+                      </div>
+                      <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">CRON Job Logs</span>
+                  </div>
+                  
+                  {syncLogs.length === 0 ? (
+                      <p className="text-gray-500 italic py-10 text-center">Ingen kørsler registreret endnu.</p>
+                  ) : (
+                      <div className="space-y-4">
+                          {syncLogs.map(log => {
+                              const isSuccess = log.status === 'success';
+                              const isExpanded = expandedSync === log.id;
+                              const hasDetails = log.processedCount > 0 || log.unmatchedCount > 0;
+                              
+                              return (
+                                  <div key={log.id} className={`border p-5 rounded-xl transition-all ${!isSuccess ? 'border-red-200 bg-red-50' : log.unmatchedCount > 0 ? 'border-amber-200 bg-amber-50/30' : 'border-gray-200 bg-white'}`}>
+                                      <div className="flex justify-between items-center cursor-pointer" onClick={() => hasDetails && setExpandedSync(isExpanded ? null : log.id)}>
+                                          <div className="flex items-center gap-4">
+                                              <div className={`w-3 h-3 rounded-full ${!isSuccess ? 'bg-red-500' : log.unmatchedCount > 0 ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+                                              <div>
+                                                  <div className="font-bold text-gray-900">{new Date(log.createdAt).toLocaleString('da-DK', { dateStyle: 'full', timeStyle: 'short' })}</div>
+                                                  <div className="text-sm text-gray-500 mt-0.5">
+                                                      {!isSuccess ? (
+                                                          <span className="text-red-600 font-medium">Fejl: {log.error}</span>
+                                                      ) : (
+                                                          <span className="flex items-center gap-2">
+                                                              <span>{log.processedCount} {log.processedCount === 1 ? 'vare' : 'varer'} opdateret</span>
+                                                              {log.unmatchedCount > 0 && (
+                                                                  <span className="text-amber-700 font-medium bg-amber-100 px-2 py-0.5 rounded text-xs">
+                                                                      {log.unmatchedCount} ukendt PLU fundet
+                                                                  </span>
+                                                              )}
+                                                          </span>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          {isSuccess && hasDetails && (
+                                              <button className="text-sm font-medium text-[#991b1b] bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors border border-gray-200">
+                                                  {isExpanded ? 'Skjul detaljer' : 'Vis detaljer'}
+                                              </button>
+                                          )}
+                                      </div>
+                                      
+                                      {isExpanded && isSuccess && hasDetails && (
+                                          <div className="mt-5 pt-5 border-t border-gray-100 space-y-6">
+                                              
+                                              {/* SUCCES TABEL - Varer opdateret */}
+                                              {log.details && log.details.length > 0 && (
+                                                  <div>
+                                                      <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                          Opdateret Lager
+                                                      </h4>
+                                                      <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                                                          <table className="w-full text-left text-sm">
+                                                              <thead className="bg-gray-100 text-gray-500 font-bold uppercase tracking-wider text-xs">
+                                                                  <tr>
+                                                                      <th className="px-4 py-3">Varenavn (NemPOS)</th>
+                                                                      <th className="px-4 py-3">PLU</th>
+                                                                      <th className="px-4 py-3">Type</th>
+                                                                      <th className="px-4 py-3 text-right">Fratrukket</th>
+                                                                      <th className="px-4 py-3 text-right">Nyt Lager</th>
+                                                                  </tr>
+                                                              </thead>
+                                                              <tbody className="divide-y divide-gray-200 bg-white">
+                                                                  {log.details.map((detail, idx) => (
+                                                                      <tr key={idx} className="hover:bg-gray-50">
+                                                                          <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
+                                                                          <td className="px-4 py-3 font-mono text-gray-500">{detail.plu || detail.sku}</td>
+                                                                          <td className="px-4 py-3">
+                                                                              <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium border border-gray-200">
+                                                                                  {detail.type}
+                                                                              </span>
+                                                                          </td>
+                                                                          <td className={`px-4 py-3 text-right font-bold ${detail.deducted < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                              {detail.deducted < 0 ? '+' : '-'}
+                                                                              {parseFloat(Math.abs(detail.deducted).toFixed(2)).toString().replace('.', ',')}
+                                                                          </td>
+                                                                          <td className="px-4 py-3 text-right font-bold text-gray-900">
+                                                                              {parseFloat(Number(detail.newStock).toFixed(2)).toString().replace('.', ',')}
+                                                                          </td>
+                                                                      </tr>
+                                                                  ))}
+                                                              </tbody>
+                                                          </table>
+                                                      </div>
+                                                  </div>
+                                              )}
 
-                                    {/* SLADRHANK TABEL - Ukendte PLU'er */}
-                                    {log.unmatchedDetails && log.unmatchedDetails.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-bold text-amber-700 mb-3 flex items-center gap-2">
-                                                <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                                                Sladrhank: Solgt på kassen, men mangler i Firebase
-                                            </h4>
-                                            <div className="bg-amber-50 rounded-lg overflow-hidden border border-amber-200">
-                                                <table className="w-full text-left text-sm">
-                                                    <thead className="bg-amber-100 text-amber-700 font-bold uppercase tracking-wider text-xs">
-                                                        <tr>
-                                                            <th className="px-4 py-3">Varenavn (NemPOS)</th>
-                                                            <th className="px-4 py-3">PLU (Mangler)</th>
-                                                            <th className="px-4 py-3 text-right">Salgsdato</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-amber-100 bg-white">
-                                                        {log.unmatchedDetails.map((detail, idx) => (
-                                                            <tr key={idx} className="hover:bg-amber-50/50">
-                                                                <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
-                                                                <td className="px-4 py-3 font-mono font-bold text-amber-600">{detail.plu}</td>
-                                                                <td className="px-4 py-3 text-right text-gray-500">
-                                                                    {new Date(detail.orderDate).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        )}
-    </div>
-)}
+                                              {/* SLADRHANK TABEL - Ukendte PLU'er */}
+                                              {log.unmatchedDetails && log.unmatchedDetails.length > 0 && (
+                                                  <div>
+                                                      <h4 className="text-sm font-bold text-amber-700 mb-3 flex items-center gap-2">
+                                                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                                                          Sladrhank: Solgt på kassen, men mangler i Firebase
+                                                      </h4>
+                                                      <div className="bg-amber-50 rounded-lg overflow-hidden border border-amber-200">
+                                                          <table className="w-full text-left text-sm">
+                                                              <thead className="bg-amber-100 text-amber-700 font-bold uppercase tracking-wider text-xs">
+                                                                  <tr>
+                                                                      <th className="px-4 py-3">Varenavn (NemPOS)</th>
+                                                                      <th className="px-4 py-3">PLU (Mangler)</th>
+                                                                      <th className="px-4 py-3 text-right">Salgsdato</th>
+                                                                  </tr>
+                                                              </thead>
+                                                              <tbody className="divide-y divide-amber-100 bg-white">
+                                                                  {log.unmatchedDetails.map((detail, idx) => (
+                                                                      <tr key={idx} className="hover:bg-amber-50/50">
+                                                                          <td className="px-4 py-3 font-medium text-gray-800">{detail.name}</td>
+                                                                          <td className="px-4 py-3 font-mono font-bold text-amber-600">{detail.plu}</td>
+                                                                          <td className="px-4 py-3 text-right text-gray-500">
+                                                                              {new Date(detail.orderDate).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })}
+                                                                          </td>
+                                                                      </tr>
+                                                                  ))}
+                                                              </tbody>
+                                                          </table>
+                                                      </div>
+                                                  </div>
+                                              )}
+                                              
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  )}
+              </div>
+          )}
 
           {/* TAB: FEEDBACK */}
           {adminTab === 'feedback' && (
