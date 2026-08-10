@@ -159,8 +159,17 @@ export default function AdminVinkort() {
              if (cabA !== cabB) comparison = cabA - cabB;
              else comparison = (a.shelf || 9999) - (b.shelf || 9999);
           }
-          return comparison || a.id.localeCompare(b.id);
-      });
+          else if (adminSort === 'sku_asc') {
+            const skuA = (a.sku || '').trim();
+            const skuB = (b.sku || '').trim();
+            
+            if (skuA && !skuB) comparison = -1; // A har PLU, B mangler -> A øverst
+            else if (!skuA && skuB) comparison = 1;  // B har PLU, A mangler -> B øverst
+            else comparison = skuA.localeCompare(skuB, undefined, { numeric: true }); // Begge har, sorter talrigtigt
+         }
+
+         return comparison || a.id.localeCompare(b.id);
+     });
       return res;
   }, [wines, adminSearch, adminTypeFilter, adminSort, showSoldOut]);
 
@@ -649,6 +658,7 @@ export default function AdminVinkort() {
                               <option value="stock_asc">Sorter: Lager (Lavest)</option>
                               <option value="stock_desc">Sorter: Lager (Højest)</option>
                               <option value="cabinet_asc">Sorter: Lokation</option>
+                              <option value="sku_asc">Sorter: PLU-nummer</option>
                           </select>
                           
                           <button

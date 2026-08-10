@@ -65,7 +65,6 @@ export default function VinkortClient() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   
   // Avancerede filtre & Feedback
-  const [showFilters, setShowFilters] = useState(false);
   const [filterValues, setFilterValues] = useState({ country: 'all', region: 'all', producer: 'all', price: 'all' });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showThanks, setShowThanks] = useState(false);
@@ -352,9 +351,22 @@ function WineItem({ wine, onClick }) {
             <div className="pr-4">
                 <p className="text-xl font-bold text-[#991b1b] group-hover:text-red-700 transition-colors">{wine.producer}</p>
                 {wine.name && <p className="text-lg text-gray-800">{wine.name}</p>} 
-                <p className="text-sm text-gray-500 mt-1">
-                    {wine.year} — {wine.region}{wine.classification ? `, ${wine.classification}` : ''}
+                
+                <p className="text-sm text-gray-500 mt-1 flex items-center flex-wrap gap-2">
+                    <span>
+                        {wine.year} — {wine.region}{wine.classification ? `, ${wine.classification}` : ''}
+                    </span>
+                    {/* CLASSY NOTE INTEGRATION PÅ LISTEN */}
+                    {wine.note && (
+                        <>
+                            <span className="text-gray-300 font-normal text-xs">•</span>
+                            <span className="text-[#991b1b] font-serif italic text-[15px]">
+                                {wine.note}
+                            </span>
+                        </>
+                    )}
                 </p>
+
             </div>
             <div className="text-right flex-shrink-0">
                 <p className="text-xl font-bold text-gray-900">{formatCurrency(wine.price)} kr.</p>
@@ -387,17 +399,21 @@ function WineDetailsModal({ wine, onClose }) {
               <p className="text-3xl sm:text-4xl font-bold text-[#991b1b] font-serif leading-tight">{wine.producer}</p>
               {wine.name && <h2 className="text-2xl font-normal text-gray-800 font-serif mt-2">{wine.name}</h2>}
               
-              {/* HER ER DEN NYE NOTE BADGE */}
-              {wine.note && (
-                <div className="mt-3">
-                  <span className="inline-block px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#991b1b] bg-red-50 border border-red-100 rounded-full">
-                    {wine.note}
-                  </span>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-3 mt-4">
+                  <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">{wine.type} - {wine.year}</p>
+                  
+                  {/* CLASSY NOTE INTEGRATION I MODAL */}
+                  {wine.note && (
+                    <>
+                        <span className="text-gray-300 font-normal text-xs">•</span>
+                        <span className="text-[#991b1b] font-serif italic text-base">
+                            {wine.note}
+                        </span>
+                    </>
+                  )}
+              </div>
 
-              <p className="text-sm text-gray-500 font-bold uppercase tracking-widest mt-4">{wine.type} - {wine.year}</p>
-              <p className="text-base font-medium text-gray-600 mt-1">{displayOrigin}</p>
+              <p className="text-base font-medium text-gray-600 mt-2">{displayOrigin}</p>
             </div>
             
             <div className="text-left sm:text-right flex-shrink-0 mt-4 sm:mt-0 bg-gray-50 p-4 rounded-2xl border border-gray-100">
