@@ -21,6 +21,8 @@ const Settings = ({size=20, className=""}) => <svg width={size} height={size} vi
 const HistoryIcon = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>;
 const MessageSquare = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
 const Activity = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+const Archive = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>;
+const Undo = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>;
 
 const formatCurrency = (amount) => (amount || 0).toLocaleString('da-DK');
 const calculateProfit = (salesPrice, purchasePriceExVat) => {
@@ -39,9 +41,10 @@ export default function AdminVinkort() {
   const [filters, setFilters] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [syncLogs, setSyncLogs] = useState([]);
+  const [historyLogs, setHistoryLogs] = useState([]); // NY SLADRHANK LOG
 
   // Tabs
-  const [adminTab, setAdminTab] = useState('wines'); // wines, history, feedback, sync
+  const [adminTab, setAdminTab] = useState('wines'); // wines, history, sync, feedback, archived
 
   // Login States
   const [loginEmail, setLoginEmail] = useState('');
@@ -83,7 +86,6 @@ export default function AdminVinkort() {
         if (docSnap.exists() && docSnap.data().filters) setFilters(docSnap.data().filters);
     });
 
-    // ÉN samlet kilde til alle vin-data (wines kollektionen)
     const unsubWines = onSnapshot(collection(db, 'wines'), (snapshot) => {
       const loadedWines = [];
       snapshot.forEach(doc => { if (doc.id !== 'config') loadedWines.push({ id: doc.id, ...doc.data() }); });
@@ -104,7 +106,15 @@ export default function AdminVinkort() {
         setSyncLogs(logs);
     });
 
-    return () => { unsubConfig(); unsubWines(); unsubFeedback(); unsubSync(); };
+    // NY: Lytter til Sladrhank (historik)
+    const unsubHistory = onSnapshot(collection(db, 'history_logs'), (snapshot) => {
+        const logs = [];
+        snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
+        logs.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setHistoryLogs(logs.slice(0, 100)); // Viser de seneste 100 handlinger
+    });
+
+    return () => { unsubConfig(); unsubWines(); unsubFeedback(); unsubSync(); unsubHistory(); };
   }, [user]);
 
   useEffect(() => {
@@ -114,13 +124,6 @@ export default function AdminVinkort() {
         setMathState({ price: 0, purchasePrice: 0 });
     }
   }, [editingWine, showAddForm]);
-
-  const historyWines = useMemo(() => {
-      return [...wines]
-          .filter(w => w.updatedAt)
-          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-          .slice(0, 50);
-  }, [wines]);
 
   const adminSuggestions = useMemo(() => {
     const s = { producers: new Set(), classifications: new Set(), regions: new Set(), countries: new Set() };
@@ -133,8 +136,9 @@ export default function AdminVinkort() {
     return { producers: Array.from(s.producers).sort(), classifications: Array.from(s.classifications).sort(), regions: Array.from(s.regions).sort(), countries: Array.from(s.countries).sort() };
   }, [wines]);
 
+  // HOVEDLISTE
   const adminWines = useMemo(() => {
-      let res = [...wines];
+      let res = [...wines].filter(w => !w.isArchived);
       
       if (showSoldOut) {
           res = res.filter(w => w.isSoldOut);
@@ -160,18 +164,34 @@ export default function AdminVinkort() {
              else comparison = (a.shelf || 9999) - (b.shelf || 9999);
           }
           else if (adminSort === 'sku_asc') {
-            const skuA = (a.sku || '').trim();
-            const skuB = (b.sku || '').trim();
-            
-            if (skuA && !skuB) comparison = -1; // A har PLU, B mangler -> A øverst
-            else if (!skuA && skuB) comparison = 1;  // B har PLU, A mangler -> B øverst
-            else comparison = skuA.localeCompare(skuB, undefined, { numeric: true }); // Begge har, sorter talrigtigt
-         }
-
-         return comparison || a.id.localeCompare(b.id);
-     });
+             const skuA = (a.sku || '').trim();
+             const skuB = (b.sku || '').trim();
+             if (skuA && !skuB) comparison = -1; 
+             else if (!skuA && skuB) comparison = 1;  
+             else comparison = skuA.localeCompare(skuB, undefined, { numeric: true }); 
+          }
+          return comparison || a.id.localeCompare(b.id);
+      });
       return res;
   }, [wines, adminSearch, adminTypeFilter, adminSort, showSoldOut]);
+
+  // ARKIV LISTE
+  const archivedWinesList = useMemo(() => {
+      return [...wines].filter(w => w.isArchived).sort((a, b) => (a.producer || '').localeCompare(b.producer || ''));
+  }, [wines]);
+
+  // --- NY FUNKTION: Skriver i sladrhanken ---
+  const logAdminAction = async (wineName, producer, actionDescription) => {
+      try {
+          await addDoc(collection(db, 'history_logs'), {
+              wineName: `${producer} ${wineName || ''}`.trim(),
+              action: actionDescription,
+              createdAt: new Date().toISOString()
+          });
+      } catch (error) {
+          console.error("Kunne ikke gemme log:", error);
+      }
+  };
 
   const handleLogin = async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, loginEmail, loginPassword); } catch (err) { setLoginError('Forkert email eller adgangskode.'); }};
   const handleLogout = async () => { await signOut(auth); };
@@ -214,7 +234,6 @@ export default function AdminVinkort() {
     const parsedWineCabinet = data.wineCabinet ? parseInt(data.wineCabinet, 10) : "";
     const parsedShelf = data.shelf ? parseInt(data.shelf, 10) : "";
 
-    // Gemmer alt (både offentligt og privat) i ét enkelt dokument
     const wineData = {
         producer: data.producer || "", name: data.name || "", year: data.year || "", type: data.type || "",
         country: data.country || "", region: data.region || "", classification: data.classification || "",
@@ -230,27 +249,81 @@ export default function AdminVinkort() {
     try {
         if (editingWine) {
             await updateDoc(doc(db, 'wines', editingWine.id), wineData);
+            logAdminAction(wineData.name, wineData.producer, 'Redigerede vinkort-info (formular)');
             setEditingWine(null);
         } else {
             wineData.createdAt = timestamp;
+            wineData.isArchived = false;
             await addDoc(collection(db, 'wines'), wineData);
+            logAdminAction(wineData.name, wineData.producer, 'Oprettet som ny vin i systemet');
             e.target.reset(); setMathState({ price: 0, purchasePrice: 0 }); setShowAddForm(false);
         }
     } catch (err) { setAlertDialog({ message: "Fejl ved gemning: " + err.message }); }
   };
 
-  const deleteWine = (id) => { 
+  const archiveWine = (wine) => { 
       setConfirmDialog({
-          message: "Er du sikker på, at du vil slette denne vin? Dette kan ikke fortrydes.",
-          onConfirm: async () => { await deleteDoc(doc(db, 'wines', id)); }
+          message: `Er du sikker på, at du vil flytte "${wine.producer}" til arkivet? Den skjules fra vinkortet.`,
+          onConfirm: async () => { 
+              await updateDoc(doc(db, 'wines', wine.id), { isArchived: true, isSoldOut: true, updatedAt: new Date().toISOString() }); 
+              logAdminAction(wine.name, wine.producer, 'Flyttet til arkivet');
+          }
+      });
+  };
+
+  const restoreWine = (wine) => { 
+      setConfirmDialog({
+          message: `Vil du gendanne "${wine.producer}" til det aktive varelager?`,
+          onConfirm: async () => { 
+              await updateDoc(doc(db, 'wines', wine.id), { isArchived: false, updatedAt: new Date().toISOString() }); 
+              logAdminAction(wine.name, wine.producer, 'Gendannet fra arkivet');
+          }
+      });
+  };
+
+  const deleteWine = (wine) => { 
+      setConfirmDialog({
+          message: "ADVARSEL: Er du sikker på, at du vil slette denne vin PERMANENT? Dette kan ikke fortrydes.",
+          onConfirm: async () => { 
+              await deleteDoc(doc(db, 'wines', wine.id)); 
+              logAdminAction(wine.name, wine.producer, 'Slettet permanent fra databasen');
+          }
       });
   };
   
-  const toggleSoldOut = async (wine) => { await updateDoc(doc(db, 'wines', wine.id), { isSoldOut: !wine.isSoldOut, updatedAt: new Date().toISOString() }); };
-  const updateStock = async (id, val) => { await updateDoc(doc(db, 'wines', id), { stockCount: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
-  const updatePurchasePrice = async (id, val) => { await updateDoc(doc(db, 'wines', id), { purchasePrice: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
-  const updatePrice = async (id, val) => { await updateDoc(doc(db, 'wines', id), { price: parseFloat(val) || 0, updatedAt: new Date().toISOString() }); };
-  const updateSku = async (id, val) => { await updateDoc(doc(db, 'wines', id), { sku: val.trim(), updatedAt: new Date().toISOString() }); };
+  const toggleSoldOut = async (wine) => { 
+      const newStatus = !wine.isSoldOut;
+      await updateDoc(doc(db, 'wines', wine.id), { isSoldOut: newStatus, updatedAt: new Date().toISOString() }); 
+      logAdminAction(wine.name, wine.producer, `Markeret som ${newStatus ? 'UDSOLGT' : 'PÅ LAGER'}`);
+  };
+
+  const updateStock = async (wine, val) => { 
+      const newVal = parseFloat(val) || 0;
+      if (wine.stockCount === newVal) return; // Forhindrer spam hvis man ikke har ændret tallet
+      await updateDoc(doc(db, 'wines', wine.id), { stockCount: newVal, updatedAt: new Date().toISOString() }); 
+      logAdminAction(wine.name, wine.producer, `Lager ændret fra ${wine.stockCount || 0} til ${newVal}`);
+  };
+
+  const updatePurchasePrice = async (wine, val) => { 
+      const newVal = parseFloat(val) || 0;
+      if (wine.purchasePrice === newVal) return;
+      await updateDoc(doc(db, 'wines', wine.id), { purchasePrice: newVal, updatedAt: new Date().toISOString() }); 
+      logAdminAction(wine.name, wine.producer, `Købspris ændret fra ${wine.purchasePrice || 0} til ${newVal} kr.`);
+  };
+
+  const updatePrice = async (wine, val) => { 
+      const newVal = parseFloat(val) || 0;
+      if (wine.price === newVal) return;
+      await updateDoc(doc(db, 'wines', wine.id), { price: newVal, updatedAt: new Date().toISOString() }); 
+      logAdminAction(wine.name, wine.producer, `Salgspris ændret fra ${wine.price || 0} til ${newVal} kr.`);
+  };
+
+  const updateSku = async (wine, val) => { 
+      const newSku = val.trim();
+      if ((wine.sku || '') === newSku) return;
+      await updateDoc(doc(db, 'wines', wine.id), { sku: newSku, updatedAt: new Date().toISOString() }); 
+      logAdminAction(wine.name, wine.producer, `PLU ændret fra '${wine.sku || ''}' til '${newSku}'`);
+  };
 
   const exportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,PLU/SKU;Producent;Navn;År;Salgspris;Indkøbspris;Antal\n";
@@ -261,7 +334,7 @@ export default function AdminVinkort() {
 
   const printMenu = () => { 
     const printWindow = window.open('', '_blank');
-    const activeWines = wines.filter(w => !w.isSoldOut);
+    const activeWines = wines.filter(w => !w.isSoldOut && !w.isArchived);
     const createItem = (w) => `
         <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid #ccc;page-break-inside:avoid;">
             <div style="padding-right:1rem;"><p style="font-weight:bold;margin:0;">${w.producer}</p><p style="margin:2px 0;">${w.name || ''}</p><p style="font-size:0.8em;color:#666;margin:0;">${w.year}</p></div>
@@ -298,8 +371,8 @@ export default function AdminVinkort() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-800 pb-20">
-      <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
+        <div className="min-h-screen bg-gray-100 font-sans text-gray-800 pb-20">
+          <div className="mx-auto p-4 lg:p-8 w-full max-w-[1600px]">
           
           <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
               <div>
@@ -319,6 +392,9 @@ export default function AdminVinkort() {
               <button onClick={() => setAdminTab('wines')} className={`px-4 py-3 font-bold whitespace-nowrap transition-colors border-b-2 ${adminTab === 'wines' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
                   Varelager
               </button>
+              <button onClick={() => setAdminTab('archived')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'archived' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
+                  <Archive size={18}/> Arkiv
+              </button>
               <button onClick={() => setAdminTab('history')} className={`px-4 py-3 font-bold whitespace-nowrap flex items-center gap-2 transition-colors border-b-2 ${adminTab === 'history' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
                   <HistoryIcon size={18}/> Historik
               </button>
@@ -330,40 +406,92 @@ export default function AdminVinkort() {
               </button>
           </div>
 
-          {/* TAB: HISTORY */}
+          {/* TAB: ARKIV */}
+          {adminTab === 'archived' && (
+              <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
+                  <div className="flex items-center gap-3 mb-6 border-b pb-4">
+                      <Archive className="text-[#991b1b]" size={28}/>
+                      <h2 className="text-2xl font-bold font-serif text-gray-900">Arkiverede Vine</h2>
+                  </div>
+                  {archivedWinesList.length === 0 ? (
+                      <p className="text-gray-500 italic py-10 text-center">Arkivet er tomt.</p>
+                  ) : (
+                      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                          <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                  <tr>
+                                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producent & Vin</th>
+                                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type / År</th>
+                                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Handling</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 bg-white">
+                                  {archivedWinesList.map(wine => (
+                                      <tr key={wine.id} className="hover:bg-gray-50">
+                                          <td className="px-6 py-4 opacity-75">
+                                              <div className="font-bold text-gray-900">{wine.producer}</div>
+                                              <div className="text-gray-500 text-sm">{wine.name} {wine.year ? `- ${wine.year}` : ''}</div>
+                                          </td>
+                                          <td className="px-6 py-4 text-sm text-gray-500 opacity-75">
+                                              {wine.type} / {wine.year}
+                                          </td>
+                                          <td className="px-6 py-4 text-right">
+                                              <div className="flex justify-end gap-2">
+                                                  <button onClick={() => restoreWine(wine)} className="p-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition-colors flex items-center gap-2" title="Gendan til varelager">
+                                                      <Undo size={18}/> <span className="text-sm font-bold pr-1">Gendan</span>
+                                                  </button>
+                                                  <button onClick={() => deleteWine(wine)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Slet permanent fra database">
+                                                      <Trash2 size={18}/>
+                                                  </button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+                  )}
+              </div>
+          )}
+
+          {/* TAB: HISTORY (NY SLADRHANK) */}
           {adminTab === 'history' && (
               <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
                   <div className="flex items-center gap-3 mb-6 border-b pb-4">
                       <HistoryIcon className="text-[#991b1b]" size={28}/>
-                      <h2 className="text-2xl font-bold font-serif text-gray-900">Seneste Ændringer i Lager</h2>
+                      <h2 className="text-2xl font-bold font-serif text-gray-900">Sladrhank (Handlingslog)</h2>
                   </div>
-                  <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                              <tr>
-                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Tidspunkt</th>
-                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vin</th>
-                                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Handling</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200 bg-white">
-                              {historyWines.map(wine => (
-                                  <tr key={wine.id} className="hover:bg-gray-50">
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                          {new Date(wine.updatedAt).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })}
-                                      </td>
-                                      <td className="px-6 py-4">
-                                          <div className="font-bold text-gray-900">{wine.producer}</div>
-                                          <div className="text-gray-500 text-sm">{wine.name} {wine.year ? `- ${wine.year}` : ''}</div>
-                                      </td>
-                                      <td className="px-6 py-4 text-sm text-gray-500">
-                                          Opdateret
-                                      </td>
+                  
+                  {historyLogs.length === 0 ? (
+                      <p className="text-gray-500 italic py-10 text-center">Ingen handlinger registreret endnu.</p>
+                  ) : (
+                      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                          <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                  <tr>
+                                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Tidspunkt</th>
+                                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vin</th>
+                                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Hvad skete der?</th>
                                   </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 bg-white">
+                                  {historyLogs.map(log => (
+                                      <tr key={log.id} className="hover:bg-gray-50">
+                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                              {new Date(log.createdAt).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })}
+                                          </td>
+                                          <td className="px-6 py-4">
+                                              <div className="font-bold text-gray-900">{log.wineName}</div>
+                                          </td>
+                                          <td className="px-6 py-4 text-sm text-gray-800 font-medium">
+                                              {log.action}
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+                  )}
               </div>
           )}
 
@@ -420,7 +548,6 @@ export default function AdminVinkort() {
                                       {isExpanded && isSuccess && hasDetails && (
                                           <div className="mt-5 pt-5 border-t border-gray-100 space-y-6">
                                               
-                                              {/* SUCCES TABEL - Varer opdateret */}
                                               {log.details && log.details.length > 0 && (
                                                   <div>
                                                       <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
@@ -463,7 +590,6 @@ export default function AdminVinkort() {
                                                   </div>
                                               )}
 
-                                              {/* SLADRHANK TABEL - Ukendte PLU'er */}
                                               {log.unmatchedDetails && log.unmatchedDetails.length > 0 && (
                                                   <div>
                                                       <h4 className="text-sm font-bold text-amber-700 mb-3 flex items-center gap-2">
@@ -644,7 +770,7 @@ export default function AdminVinkort() {
                   <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
                       <div>
                           <h2 className="text-2xl font-bold font-serif text-[#1b4332]">Kælderens Indhold</h2>
-                          <p className="text-gray-500 mt-1">{adminWines.filter(w=>!w.isSoldOut).length} aktive varer ({wines.length} total)</p>
+                          <p className="text-gray-500 mt-1">{adminWines.filter(w=>!w.isSoldOut).length} aktive varer ({adminWines.length} total i listen)</p>
                       </div>
                       
                       <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
@@ -712,31 +838,29 @@ export default function AdminVinkort() {
                                         <div className="text-gray-600">{wine.name} {wine.year ? `- ${wine.year}` : ''}</div>
                                         <div className="text-xs text-gray-400 mt-1">{wine.classification}</div>
                                     </td>
-                                    {/* DIREKTE TASTING AF PLU */}
                                     <td className="px-4 py-4 text-center">
                                         <input 
                                           type="text" 
                                           defaultValue={wine.sku} 
-                                          onBlur={(e) => updateSku(wine.id, e.target.value)} 
+                                          onBlur={(e) => updateSku(wine, e.target.value)} 
                                           placeholder="PLU"
                                           className="w-20 p-2 border rounded-lg text-center font-mono focus:border-[#991b1b] outline-none" 
                                         />
                                     </td>
-                                    {/* DIREKTE TASTING AF SALGSPRIS */}
                                     <td className="px-4 py-4 text-right">
                                         <input 
                                           type="number" 
                                           step="any" 
                                           defaultValue={wine.price} 
-                                          onBlur={(e) => updatePrice(wine.id, e.target.value)} 
+                                          onBlur={(e) => updatePrice(wine, e.target.value)} 
                                           className="w-24 p-2 border rounded-lg text-right font-bold text-gray-900 focus:border-[#991b1b] outline-none" 
                                         />
                                     </td>
                                     <td className="px-4 py-4 text-right">
-                                        <input type="number" step="any" defaultValue={wine.purchasePrice} onBlur={(e) => updatePurchasePrice(wine.id, e.target.value)} className="w-24 p-2 border rounded-lg text-right focus:border-[#991b1b] outline-none" />
+                                        <input type="number" step="any" defaultValue={wine.purchasePrice} onBlur={(e) => updatePurchasePrice(wine, e.target.value)} className="w-24 p-2 border rounded-lg text-right focus:border-[#991b1b] outline-none" />
                                     </td>
                                     <td className="px-4 py-4 text-right">
-                                        <input type="number" step="any" defaultValue={wine.stockCount} onBlur={(e) => updateStock(wine.id, e.target.value)} className={`w-20 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : ''}`} />
+                                        <input type="number" step="any" defaultValue={wine.stockCount} onBlur={(e) => updateStock(wine, e.target.value)} className={`w-20 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : ''}`} />
                                     </td>
                                     <td className="px-6 py-4 text-gray-500 font-mono">
                                         {(wine.wineCabinet || wine.shelf) ? `${wine.wineCabinet || '-'} / ${wine.shelf || '-'}` : '-'}
@@ -749,7 +873,9 @@ export default function AdminVinkort() {
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex justify-center items-center gap-2">
                                             <button onClick={() => {setEditingWine(wine); setShowAddForm(false);}} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"><Edit2 size={18}/></button>
-                                            <button onClick={() => deleteWine(wine.id)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                                            <button onClick={() => archiveWine(wine)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors" title="Flyt til arkiv">
+                                                <Archive size={18}/>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
