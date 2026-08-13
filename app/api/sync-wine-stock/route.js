@@ -44,9 +44,9 @@ export async function GET(req) {
       'Company-Uuid': process.env.NEMPOS_COMPANY_UUID
     };
 
+    // Vi kigger 48 timer tilbage. Huskebogen forhindrer dobbelt-træk.
     const timeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000); 
     const updatedWines = [];
-    const unmatchedPLUs = [];
     
     let page = 1;
     let keepFetching = true;
@@ -63,6 +63,7 @@ export async function GET(req) {
           break; 
       }
 
+      // Filtrer på tid
       const ordersInTimeframe = [];
       for (const order of ordersData.orders) {
         if (order.status !== 'completed') continue;
@@ -72,6 +73,7 @@ export async function GET(req) {
         }
       }
 
+      // Filtrer med Huskebogen
       const ordersToProcess = [];
       for (const order of ordersInTimeframe) {
         const orderDocRef = doc(dbLite, 'processed_orders', order.uuid);
@@ -100,7 +102,6 @@ export async function GET(req) {
             let hasDeductedSomething = false;
 
             for (const line of detailData.order.order_lines) {
-              // HER ER MAGIEN: Vi fanger varens NemPOS-navn i stedet for PLU
               const matchKey = line.sellable?.name || line.product_name;
 
               if (matchKey) {
@@ -108,13 +109,12 @@ export async function GET(req) {
                 const rawDeduction = isGlass ? (line.quantity * 0.2) : line.quantity;
                 const deductionAmount = Math.round(rawDeduction * 10) / 10;
                 
-                // Vi "trimmer" navnet for at undgå fejl med usynlige mellemrum
                 const matchString = String(matchKey).trim();
 
-                // Vi leder i 'sku' (PLU-feltet) efter NemPOS-navnet
                 const q = query(collection(dbLite, 'wines'), where('sku', '==', matchString));
                 const wineQuery = await getDocs(q);
 
+                // Den stumme tjener: Vi gør KUN noget, hvis varen findes i Firebase!
                 if (!wineQuery.empty) {
                   const wineDoc = wineQuery.docs[0];
                   const firebaseId = wineDoc.id;
@@ -130,16 +130,13 @@ export async function GET(req) {
 
                   updatedWines.push({ 
                     name: line.product_name || matchString, 
-                    plu: matchString, // PLU er nu navnet!
+                    plu: matchString,
                     deducted: deductionAmount,
                     newStock: newStock,
                     type: isGlass ? 'Glas' : 'Flaske'
                   });
                   console.log(`✅ TRUKKET FRA LAGER: ${matchString}`);
                   hasDeductedSomething = true;
-                } else {
-                  unmatchedPLUs.push({ name: matchString, plu: matchString, orderDate: detailData.order.created_at });
-                  console.log(`🕵️ SLADRHANK: Varen '${matchString}' blev solgt, men findes ikke i Firebase PLU-feltet!`);
                 }
               }
             }
@@ -161,18 +158,17 @@ export async function GET(req) {
 
     console.log(`--- SYNKRONISERING FÆRDIG ---`);
 
-    if (updatedWines.length > 0 || unmatchedPLUs.length > 0) {
+    // Logger nu KUN hvis vi faktisk har opdateret et varelager
+    if (updatedWines.length > 0) {
       await addDoc(collection(dbLite, 'sync_logs'), {
         createdAt: new Date().toISOString(),
         status: 'success',
         processedCount: updatedWines.length,
-        details: updatedWines,
-        unmatchedCount: unmatchedPLUs.length,
-        unmatchedDetails: unmatchedPLUs
+        details: updatedWines
       });
     }
 
-    return NextResponse.json({ success: true, processed: updatedWines.length, unmatched: unmatchedPLUs.length });
+    return NextResponse.json({ success: true, processed: updatedWines.length });
 
   } catch (error) {
     console.error('Fejl:', error.message);
