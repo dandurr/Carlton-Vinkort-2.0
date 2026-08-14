@@ -11,7 +11,7 @@ const Search = ({size=20, className=""}) => <svg width={size} height={size} view
 const X = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
 const LogOut = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
 const Printer = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>;
-const Download = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
+const Download = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
 const Plus = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
 const Edit2 = ({size=18, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>;
 const Trash2 = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
@@ -41,7 +41,7 @@ export default function AdminVinkort() {
   const [filters, setFilters] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [syncLogs, setSyncLogs] = useState([]);
-  const [historyLogs, setHistoryLogs] = useState([]); // NY SLADRHANK LOG
+  const [historyLogs, setHistoryLogs] = useState([]);
 
   // Tabs
   const [adminTab, setAdminTab] = useState('wines'); // wines, history, sync, feedback, archived
@@ -106,12 +106,11 @@ export default function AdminVinkort() {
         setSyncLogs(logs);
     });
 
-    // NY: Lytter til Sladrhank (historik)
     const unsubHistory = onSnapshot(collection(db, 'history_logs'), (snapshot) => {
         const logs = [];
         snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
         logs.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setHistoryLogs(logs.slice(0, 100)); // Viser de seneste 100 handlinger
+        setHistoryLogs(logs.slice(0, 100));
     });
 
     return () => { unsubConfig(); unsubWines(); unsubFeedback(); unsubSync(); unsubHistory(); };
@@ -180,7 +179,6 @@ export default function AdminVinkort() {
       return [...wines].filter(w => w.isArchived).sort((a, b) => (a.producer || '').localeCompare(b.producer || ''));
   }, [wines]);
 
-  // --- NY FUNKTION: Skriver i sladrhanken ---
   const logAdminAction = async (wineName, producer, actionDescription) => {
       try {
           await addDoc(collection(db, 'history_logs'), {
@@ -203,7 +201,8 @@ export default function AdminVinkort() {
       
       const newFilter = { id, label: newFilterLabel, value: newFilterSearch };
       try {
-          await setDoc(doc(db, 'wines', 'config'), { filters: [...filters, newFilter] });
+          // MED MERGE SÅ VI IKKE OVERSKRIVER ALT!
+          await setDoc(doc(db, 'wines', 'config'), { filters: [...filters, newFilter] }, { merge: true });
           setNewFilterLabel(''); setNewFilterSearch(''); setAlertDialog({ message: "Filteret er nu oprettet!"});
       } catch (error) { setAlertDialog({ message: "Kunne ikke gemme filter." }); }
   };
@@ -212,7 +211,10 @@ export default function AdminVinkort() {
       setConfirmDialog({
           message: "Er du sikker på, at du vil slette dette filter?",
           onConfirm: async () => {
-              try { await setDoc(doc(db, 'wines', 'config'), { filters: filters.filter(f => f.id !== filterIdToDelete) }); } 
+              try { 
+                  // MED MERGE HER OGSÅ
+                  await setDoc(doc(db, 'wines', 'config'), { filters: filters.filter(f => f.id !== filterIdToDelete) }, { merge: true }); 
+              } 
               catch (error) { setAlertDialog({ message: "Kunne ikke slette filter." }); }
           }
       });
@@ -299,7 +301,7 @@ export default function AdminVinkort() {
 
   const updateStock = async (wine, val) => { 
       const newVal = parseFloat(val) || 0;
-      if (wine.stockCount === newVal) return; // Forhindrer spam hvis man ikke har ændret tallet
+      if (wine.stockCount === newVal) return;
       await updateDoc(doc(db, 'wines', wine.id), { stockCount: newVal, updatedAt: new Date().toISOString() }); 
       logAdminAction(wine.name, wine.producer, `Lager ændret fra ${wine.stockCount || 0} til ${newVal}`);
   };
@@ -454,7 +456,7 @@ export default function AdminVinkort() {
               </div>
           )}
 
-          {/* TAB: HISTORY (NY SLADRHANK) */}
+          {/* TAB: HISTORY */}
           {adminTab === 'history' && (
               <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
                   <div className="flex items-center gap-3 mb-6 border-b pb-4">
@@ -662,6 +664,21 @@ export default function AdminVinkort() {
                           <div>
                               <h2 className="text-2xl font-bold font-serif text-gray-900">Administrer Genveje (Filtre)</h2>
                               <p className="text-gray-600 mt-1">Styr knapperne i toppen af kundernes vinkort.</p>
+                              
+                              {/* --- TRYLLE-KNAPPEN ER HER! --- */}
+                              <button onClick={async () => {
+                                  const fasteFiltre = [
+                                      { id: 'carltons_udvalgte', label: "Carlton's Udvalgte", value: "carlton" },
+                                      { id: 'seasonsChoice', label: "Sæsonens Udvalgte", value: "sæson" }
+                                  ];
+                                  const mergedFilters = [...filters, ...fasteFiltre.filter(hf => !filters.some(f => f.id === hf.id))];
+                                  await setDoc(doc(db, 'wines', 'config'), { filters: mergedFilters }, { merge: true });
+                                  alert("BUM! De faste knapper er gendannet i databasen.");
+                              }} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                                  🛠️ Gendan Faste Knapper
+                              </button>
+                              {/* ------------------------------ */}
+
                           </div>
                           <button onClick={() => setShowFilterSettings(false)} className="text-gray-400 hover:text-gray-800 bg-gray-50 p-2 rounded-full"><X size={24}/></button>
                       </div>
