@@ -18,7 +18,7 @@ const calculateProfit = (salesPrice, purchasePriceExVat) => {
   return { priceWithVat, profit, margin };
 };
 
-export default function WineFormModal({ wineToEdit, filters, suggestions, onClose, onSuccess, onError }: any) {
+export default function WineFormModal({ wineToEdit, filters, suggestions, onClose, onSuccess, onError }) {
     const [mathState, setMathState] = useState({ price: 0, purchasePrice: 0 });
     const isEditing = !!wineToEdit;
 

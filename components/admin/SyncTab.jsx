@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 
 const Activity = ({size=28, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
 
-export default function SyncTab({ syncLogs }: any) {
+export default function SyncTab({ syncLogs }) {
     const [expandedSync, setExpandedSync] = useState(null);
 
     return (
