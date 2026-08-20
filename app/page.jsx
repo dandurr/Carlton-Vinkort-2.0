@@ -12,7 +12,6 @@ const MessageSquare = ({ size = 16, className = "" }) => <svg width={size} heigh
 
 const formatCurrency = (amount) => (amount || 0).toLocaleString('da-DK');
 
-// --- FEEDBACK MODAL KOMPONENT ---
 function FeedbackModal({ onClose, onSuccess }) {
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
@@ -56,7 +55,6 @@ export default function VinkortClient() {
   const [filters, setFilters] = useState([{ id: 'carltons_udvalgte', label: "Carlton's Udvalgte på glas" }]);
   const [loading, setLoading] = useState(true);
 
-  // Client States
   const [activeTypeFilter, setActiveTypeFilter] = useState('all');
   const [activeSubFilter, setActiveSubFilter] = useState('all');
   const [selectedCountry, setSelectedCountry] = useState(null); 
@@ -64,12 +62,10 @@ export default function VinkortClient() {
   const [selectedWine, setSelectedWine] = useState(null); 
   const [showBackToTop, setShowBackToTop] = useState(false);
   
-  // Avancerede filtre & Feedback
   const [filterValues, setFilterValues] = useState({ country: 'all', region: 'all', producer: 'all', price: 'all' });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showThanks, setShowThanks] = useState(false);
 
-  // Data Fetching
   useEffect(() => {
     const unsubConfig = onSnapshot(doc(db, 'wines', 'config'), (docSnap) => {
         if (docSnap.exists() && docSnap.data().filters) setFilters(docSnap.data().filters);
@@ -93,15 +89,6 @@ export default function VinkortClient() {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Dropdown Data lister
-  const uniqueCountries = useMemo(() => Array.from(new Set(wines.map(w => w.country).filter(Boolean))).sort(), [wines]);
-  const uniqueProducers = useMemo(() => Array.from(new Set(wines.map(w => w.producer).filter(Boolean))).sort(), [wines]);
-  const uniqueRegions = useMemo(() => {
-    if (filterValues.country === 'all') return [];
-    return Array.from(new Set(wines.filter(w => w.country === filterValues.country).map(w => w.region).filter(Boolean))).sort();
-  }, [wines, filterValues.country]);
-
-  // Dyb filtreringslogik
   const filteredClientWines = useMemo(() => {
     let result = wines.filter(w => !w.isSoldOut);
 
@@ -116,43 +103,27 @@ export default function VinkortClient() {
 
     if (activeTypeFilter !== 'all') result = result.filter(w => w.type === activeTypeFilter);
     if (selectedCountry) result = result.filter(w => w.country === selectedCountry);
-
-    // Dropdown filtre check
-    if (filterValues.producer !== 'all') result = result.filter(w => w.producer === filterValues.producer);
-    if (filterValues.country !== 'all') result = result.filter(w => w.country === filterValues.country);
     if (filterValues.region !== 'all') result = result.filter(w => w.region === filterValues.region);
-    if (filterValues.price !== 'all') {
-        if (filterValues.price === '2000+') {
-            result = result.filter(w => (w.price || 0) >= 2000);
-        } else {
-            const [min, max] = filterValues.price.split('-').map(Number);
-            result = result.filter(w => (w.price || 0) >= min && (w.price || 0) <= max);
-        }
-    }
 
+    // HER LIGGER MAGIEN: Vi kigger efter vores nye tags/flueben!
     if (activeSubFilter !== 'all') {
       if (activeSubFilter === 'carltons_udvalgte') {
         result = result.filter(w => w.carltonsChoice);
-      } else if (activeSubFilter === 'seasonsChoice') {
-        result = result.filter(w => w.seasonsChoice);
       } else {
-        const filterObj = filters.find(f => f.id === activeSubFilter);
-        const term = (filterObj?.value || filterObj?.label || '').toLowerCase();
-        result = result.filter(w => [w.country, w.region, w.description, w.type].join(' ').toLowerCase().includes(term));
+        // Hvis vinens "tags"-liste eksisterer, og indeholder det valgte knap-ID
+        result = result.filter(w => w.tags && w.tags.includes(activeSubFilter));
       }
     }
 
     result.sort((a, b) => (a.price || 0) - (b.price || 0));
     return result;
-  }, [wines, searchQuery, activeTypeFilter, activeSubFilter, selectedCountry, filters, filterValues]);
+  }, [wines, searchQuery, activeTypeFilter, activeSubFilter, selectedCountry, filterValues]);
 
-  // Den opdaterede groupedWines
   const groupedWines = useMemo(() => {
     const groups = {};
-    const isSpecialCollection = ['carltons_udvalgte', 'seasonsChoice'].includes(activeSubFilter);
+    const isSpecialCollection = ['carltons_udvalgte'].includes(activeSubFilter) || (activeSubFilter !== 'all');
     const typeOrder = ["Mousserende", "Hvidvin", "Rødvin", "Rosévin", "Dessertvin"];
     
-    // Sikrer at vi får alle typer, men i den rigtige rækkefølge først
     const types = [...new Set([...typeOrder, ...filteredClientWines.map(w => w.type).filter(Boolean)])];
 
     types.forEach(type => {
@@ -160,10 +131,8 @@ export default function VinkortClient() {
       if (winesOfType.length === 0) return;
 
       if (isSpecialCollection) {
-         // Hvis vi viser udvalgte vine, grupperer vi kun efter type
          groups[type] = { wines: winesOfType };
       } else {
-         // Normal visning: Gruppér efter type og derefter efter land
          groups[type] = { countries: {} };
          winesOfType.forEach(w => {
            const country = w.country || 'Diverse';
@@ -189,7 +158,6 @@ export default function VinkortClient() {
           <MessageSquare size={16}/> Giv Feedback
       </button>
 
-      {/* HEADER */}
       <header className="bg-white px-6 py-16 text-center shadow-sm border-b border-gray-100">
         <h1 className="text-6xl font-bold text-[#1b4332] font-serif tracking-tight">Carlton</h1>
         <div className="w-24 h-1 bg-[#991b1b] mx-auto mt-6"></div>
@@ -198,58 +166,27 @@ export default function VinkortClient() {
 
       <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl -mt-6 relative z-20">
         
-        {/* SØG */}
         <div className="mb-6 bg-white p-2 rounded-2xl shadow-md border border-gray-100 flex items-center">
             <Search className="text-gray-400 ml-4 mr-2" size={20} />
-            <input 
-                type="text" 
-                placeholder="Søg på navn, drue, producent..." 
-                value={searchQuery} 
-                onChange={e => setSearchQuery(e.target.value)} 
-                className="flex-1 p-4 bg-transparent outline-none text-lg w-full" 
-            />
+            <input type="text" placeholder="Søg på navn, drue, producent..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-1 p-4 bg-transparent outline-none text-lg w-full" />
         </div>
 
-        {/* --- HURTIG FILTRERING KASKADE --- */}
         <div className="space-y-4 mb-12">
-            
-            {/* RÆKKE 1: VINTYPE */}
             <div className="flex flex-wrap justify-center gap-3">
                  {['all', 'Mousserende', 'Hvidvin', 'Rødvin', 'Rosévin', 'Dessertvin'].map(type => (
-                     <button 
-                        key={type} 
-                        onClick={() => { 
-                            setActiveTypeFilter(type); 
-                            setSelectedCountry(null); 
-                            setFilterValues(prev => ({...prev, region: 'all'})); // Nulstiller område
-                        }} 
-                        className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${activeTypeFilter === type ? 'bg-[#991b1b] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'}`}
-                     >
+                     <button key={type} onClick={() => { setActiveTypeFilter(type); setSelectedCountry(null); setFilterValues(prev => ({...prev, region: 'all'})); }} className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${activeTypeFilter === type ? 'bg-[#991b1b] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'}`}>
                         {type === 'all' ? 'Alle Vine' : type}
                      </button>
                  ))}
             </div>
 
-            {/* RÆKKE 2: LAND (Vises kun hvis en specifik vintype er valgt) */}
             {activeTypeFilter !== 'all' && (() => {
-                // Find alle lande for den valgte vintype
-                const availableCountriesForType = Array.from(new Set(
-                    wines.filter(w => w.type === activeTypeFilter && !w.isSoldOut).map(w => w.country).filter(Boolean)
-                )).sort();
-
+                const availableCountriesForType = Array.from(new Set(wines.filter(w => w.type === activeTypeFilter && !w.isSoldOut).map(w => w.country).filter(Boolean))).sort();
                 if (availableCountriesForType.length === 0) return null;
-
                 return (
                     <div className="flex flex-wrap justify-center gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
                         {availableCountriesForType.map(country => (
-                            <button 
-                                key={country}
-                                onClick={() => { 
-                                    setSelectedCountry(country === selectedCountry ? null : country); 
-                                    setFilterValues(prev => ({...prev, region: 'all'})); // Nulstiller område ved skift af land
-                                }}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${selectedCountry === country ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                            >
+                            <button key={country} onClick={() => { setSelectedCountry(country === selectedCountry ? null : country); setFilterValues(prev => ({...prev, region: 'all'})); }} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${selectedCountry === country ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                                 {country}
                             </button>
                         ))}
@@ -257,23 +194,13 @@ export default function VinkortClient() {
                 );
             })()}
 
-            {/* RÆKKE 3: OMRÅDE (Vises kun hvis et land er valgt) */}
             {selectedCountry && (() => {
-                // Find alle områder for den valgte vintype og det valgte land
-                const availableRegions = Array.from(new Set(
-                    wines.filter(w => w.type === activeTypeFilter && w.country === selectedCountry && !w.isSoldOut).map(w => w.region).filter(Boolean)
-                )).sort();
-
+                const availableRegions = Array.from(new Set(wines.filter(w => w.type === activeTypeFilter && w.country === selectedCountry && !w.isSoldOut).map(w => w.region).filter(Boolean))).sort();
                 if (availableRegions.length === 0) return null;
-
                 return (
                     <div className="flex flex-wrap justify-center gap-2 pt-2 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
                         {availableRegions.map(region => (
-                            <button 
-                                key={region}
-                                onClick={() => setFilterValues(prev => ({...prev, region: region === prev.region ? 'all' : region}))}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filterValues.region === region ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}
-                            >
+                            <button key={region} onClick={() => setFilterValues(prev => ({...prev, region: region === prev.region ? 'all' : region}))} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filterValues.region === region ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>
                                 {region}
                             </button>
                         ))}
@@ -282,27 +209,21 @@ export default function VinkortClient() {
             })()}
         </div>
 
-        {/* SUB FILTRE (Carltons Udvalgte osv) */}
         <div className="flex flex-wrap justify-center gap-2 mb-12 border-t border-gray-200 pt-6">
             {filters.map(f => (
-                <button 
-                    key={f.id} 
-                    onClick={() => setActiveSubFilter(prev => prev === f.id ? 'all' : f.id)}
-                    className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeSubFilter === f.id ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                >
+                <button key={f.id} onClick={() => setActiveSubFilter(prev => prev === f.id ? 'all' : f.id)} className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeSubFilter === f.id ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                     {f.label}
                 </button>
             ))}
         </div>
 
-        {/* VIN LISTE */}
         <div className="space-y-16">
             {Object.keys(groupedWines).length === 0 && (
-                <div className="text-center py-20 text-gray-400 italic">Ingen vine matchede din søgning...</div>
+                <div className="text-center py-20 text-gray-400 italic">Ingen vine matchede din filtrering...</div>
             )}
             
             {Object.keys(groupedWines).map(groupName => {
-                const groupData = groupedWines[groupName]; // Sikrer dataen til koden nedenfor
+                const groupData = groupedWines[groupName];
                 return (
                 <div key={groupName}>
                     <h2 className="text-3xl font-bold text-[#1b4332] font-serif border-b-2 border-[#991b1b] pb-2 mb-8">{groupName}</h2>
@@ -326,7 +247,6 @@ export default function VinkortClient() {
         </div>
       </div>
 
-      {/* FLYDENDE TAK BESKED */}
       {showThanks && (
           <div className="fixed top-10 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl font-bold z-50 animate-in slide-in-from-top-10">
               Tak for din feedback!
@@ -353,24 +273,19 @@ function WineItem({ wine, onClick }) {
                 {wine.name && <p className="text-lg text-gray-800">{wine.name}</p>} 
                 
                 <p className="text-sm text-gray-500 mt-1 flex items-center flex-wrap gap-2">
-                    <span>
-                        {wine.year} — {wine.region}{wine.classification ? `, ${wine.classification}` : ''}
-                    </span>
-                    {/* CLASSY NOTE INTEGRATION PÅ LISTEN */}
+                    <span>{wine.year} — {wine.region}{wine.classification ? `, ${wine.classification}` : ''}</span>
                     {wine.note && (
-                        <>
-                            <span className="text-gray-300 font-normal text-xs">•</span>
-                            <span className="text-[#991b1b] font-serif italic text-[15px]">
-                                {wine.note}
-                            </span>
-                        </>
+                        <><span className="text-gray-300 font-normal text-xs">•</span><span className="text-[#991b1b] font-serif italic text-[15px]">{wine.note}</span></>
                     )}
                 </p>
-
             </div>
             <div className="text-right flex-shrink-0">
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(wine.price)} kr.</p>
-                {wine.glass_price && <p className="text-sm text-gray-500 italic">Glas: {wine.glass_price}</p>}
+                {/* Her har vi samlet størrelse og pris */}
+                <div className="flex items-baseline justify-end gap-2">
+                    {wine.size && <span className="text-sm text-gray-500 font-medium">{wine.size}</span>}
+                    <p className="text-xl font-bold text-gray-900">{formatCurrency(wine.price)} kr.</p>
+                </div>
+                {wine.glass_price && <p className="text-sm text-gray-500 italic mt-0.5">Glas: {wine.glass_price}</p>}
             </div>
         </div>
     );
@@ -390,9 +305,7 @@ function WineDetailsModal({ wine, onClose }) {
       <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl my-8 mx-auto animate-in zoom-in-95 duration-200 border-t-8 border-[#991b1b]" onClick={e => e.stopPropagation()}>
         <div className="relative p-8 sm:p-10">
           
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
-              <X size={24} />
-          </button>
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"><X size={24} /></button>
           
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 pr-8">
             <div className="pr-4">
@@ -401,18 +314,8 @@ function WineDetailsModal({ wine, onClose }) {
               
               <div className="flex flex-wrap items-center gap-3 mt-4">
                   <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">{wine.type} - {wine.year}</p>
-                  
-                  {/* CLASSY NOTE INTEGRATION I MODAL */}
-                  {wine.note && (
-                    <>
-                        <span className="text-gray-300 font-normal text-xs">•</span>
-                        <span className="text-[#991b1b] font-serif italic text-base">
-                            {wine.note}
-                        </span>
-                    </>
-                  )}
+                  {wine.note && (<><span className="text-gray-300 font-normal text-xs">•</span><span className="text-[#991b1b] font-serif italic text-base">{wine.note}</span></>)}
               </div>
-
               <p className="text-base font-medium text-gray-600 mt-2">{displayOrigin}</p>
             </div>
             
@@ -423,41 +326,14 @@ function WineDetailsModal({ wine, onClose }) {
           </div>
           
           <div className="mt-8 pt-8 border-t border-gray-100 space-y-6">
-            {wine.description && (
-                <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Beskrivelse</p>
-                    <p className="text-gray-800 leading-relaxed text-lg">{wine.description}</p>
-                </div>
-            )}
-            
-            {wine.grapes && (
-                <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Druer</p>
-                    <p className="text-gray-800">{wine.grapes}</p>
-                </div>
-            )}
-            
-            {wine.pairing && (
-                <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Vinifikation & Madmatch</p>
-                    <p className="text-gray-800 leading-relaxed">{wine.pairing}</p>
-                </div>
-            )}
-            
-            {wine.facts && (
-                <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Fakta</p>
-                    <p className="text-gray-800">{wine.facts}</p>
-                </div>
-            )}
+            {wine.description && (<div><p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Beskrivelse</p><p className="text-gray-800 leading-relaxed text-lg">{wine.description}</p></div>)}
+            {wine.grapes && (<div><p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Druer</p><p className="text-gray-800">{wine.grapes}</p></div>)}
+            {wine.pairing && (<div><p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Vinifikation & Madmatch</p><p className="text-gray-800 leading-relaxed">{wine.pairing}</p></div>)}
+            {wine.facts && (<div><p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Fakta</p><p className="text-gray-800">{wine.facts}</p></div>)}
           </div>
 
           {(wine.wineCabinet || wine.shelf) && (
-            <div className="mt-6 text-right">
-              <span className="text-[10px] text-gray-300 font-mono tracking-widest cursor-default select-none hover:text-gray-400 transition-colors" title="Lokation (Skab / Hylde)">
-                {wine.wineCabinet || '-'} / {wine.shelf || '-'}
-              </span>
-            </div>
+            <div className="mt-6 text-right"><span className="text-[10px] text-gray-300 font-mono tracking-widest cursor-default select-none hover:text-gray-400 transition-colors" title="Lokation (Skab / Hylde)">{wine.wineCabinet || '-'} / {wine.shelf || '-'}</span></div>
           )}
         </div>
       </div>
