@@ -1,4 +1,4 @@
-// components/admin/WineTable.tsx
+// components/admin/WineTable.jsx
 'use client';
 
 import React from 'react';
@@ -31,6 +31,8 @@ export default function WineTable({
                 <thead className="bg-gray-50 text-gray-600">
                     <tr>
                         <th className="px-6 py-4 font-bold uppercase">Producent & Vin</th>
+                        {/* NY KOLONNE TIL VINTYPE */}
+                        <th className="px-4 py-4 font-bold uppercase">Type</th>
                         <th className="px-4 py-4 font-bold uppercase text-center">PLU</th>
                         <th className="px-4 py-4 font-bold uppercase text-right">Salgspris</th>
                         <th className="px-4 py-4 font-bold uppercase text-right">Købspris</th>
@@ -46,6 +48,14 @@ export default function WineTable({
                                 <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
                                 <div className="text-gray-600">{wine.name}</div>
                             </td>
+                            
+                            {/* NY DATA-CELLE TIL VINTYPE */}
+                            <td className="px-4 py-4">
+                                <span className="px-3 py-1 bg-gray-100 border border-gray-200 text-gray-600 rounded-md text-xs font-bold uppercase tracking-wider">
+                                    {wine.type || 'Ukendt'}
+                                </span>
+                            </td>
+
                             <td className="px-4 py-4 text-center">
                                 <input 
                                     key={`sku-${wine.id}-${wine.sku}`}
