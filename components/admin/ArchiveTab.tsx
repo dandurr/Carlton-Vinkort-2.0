@@ -8,7 +8,7 @@ const ArchiveIcon = ({size=28, className=""}) => <svg width={size} height={size}
 const Undo = ({size=18, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>;
 const Trash2 = ({size=18, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 
-export default function ArchiveTab({ wines, onRestore, onDelete }) {
+export default function ArchiveTab({ wines, onRestore, onDelete }: any) {
     return (
         <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-200 animate-in fade-in">
             <div className="flex items-center gap-3 mb-6 border-b pb-4">
