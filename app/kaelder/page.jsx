@@ -13,6 +13,7 @@ const Package = ({size=24, className=""}) => <svg width={size} height={size} vie
 const Plus = ({size=40, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
 const Minus = ({size=40, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/></svg>;
 const Home = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+const Star = ({size=16, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
 
 // --- KÆLDERENS GEOGRAFI ---
 const CELLAR_MAP = {
@@ -45,20 +46,18 @@ export default function KaelderTouch() {
         });
         return () => unsub();
     }, []);
-    // NY LYTTER: Holder øje med beskeder fra restauranten!
+
     useEffect(() => {
-        if (wines.length === 0) return; // Vent til vinene er indlæst
-        
+        if (wines.length === 0) return;
         const unsub = onSnapshot(doc(db, 'wines', 'cellar_request'), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // Hvis beskeden er ny (inden for de sidste 2 minutter) og vi ikke har set den før
                 if (data && data.wineId && data.timestamp > lastRequestTime && (Date.now() - data.timestamp < 120000)) {
                     const requestedWine = wines.find(w => w.id === data.wineId);
                     if (requestedWine) {
                         setSelectedWine(requestedWine);
-                        setIsStatusMode(false); // Hop ud af status-tilstand og vis kortet!
-                        setLastRequestTime(data.timestamp); // Husk at vi har åbnet den
+                        setIsStatusMode(false);
+                        setLastRequestTime(data.timestamp);
                     }
                 }
             }
@@ -83,7 +82,7 @@ export default function KaelderTouch() {
             });
             await addDoc(collection(db, 'history_logs'), {
                 wineName: `${wine.producer} ${wine.name || ''}`,
-                action: `Touch-skærm: Lager justeret med ${change > 0 ? '+'+change : change} (nu: ${newStock})`,
+                action: `PC-skærm: Lager justeret med ${change > 0 ? '+'+change : change} (nu: ${newStock})`,
                 createdAt: new Date().toISOString()
             });
             setSelectedWine({...wine, stockCount: newStock});
@@ -93,49 +92,46 @@ export default function KaelderTouch() {
     return (
         <div className="h-screen w-screen bg-[#FDFBF7] text-gray-900 font-sans flex p-4 gap-4 overflow-hidden selection:bg-[#991b1b] selection:text-white">
             
-            {/* VENSTRE SPALTE: Søgning & Liste (Ca. 45% bredde) */}
-            <div className="w-[45%] flex flex-col bg-white rounded-[2rem] shadow-lg border border-gray-100 overflow-hidden">
-                {/* Header i venstre spalte */}
-                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                    <Link href="/admin" className="p-3 bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-gray-700 shadow-sm transition-colors">
-                        <Home size={24} />
+            {/* VENSTRE SPALTE: Søgning & Liste */}
+            <div className="w-1/3 flex flex-col bg-white rounded-[2rem] shadow-lg border border-gray-100 overflow-hidden min-w-[350px]">
+                <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <Link href="/admin" className="p-3 bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-gray-700 shadow-sm transition-colors" title="Tilbage til Admin">
+                        <Home size={20} />
                     </Link>
                     <button 
                         onClick={() => { setIsStatusMode(!isStatusMode); setSelectedWine(null); }}
-                        className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${isStatusMode ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm ${isStatusMode ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                     >
-                        <Package size={18}/> 
+                        <Package size={16}/> 
                         {isStatusMode ? 'STATUS TILSTAND' : 'SKIFT TIL STATUS'}
                     </button>
                 </div>
 
-                {/* Kæmpe søgefelt */}
-                <div className="p-6 border-b border-gray-100">
+                <div className="p-4 border-b border-gray-100">
                     <div className="relative">
-                        <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                         <input 
                             type="text" 
                             placeholder="Søg..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            className={`w-full bg-gray-50 border-2 rounded-2xl py-6 pl-16 pr-16 text-2xl outline-none transition-colors placeholder-gray-400 font-medium
+                            className={`w-full bg-gray-50 border-2 rounded-xl py-4 pl-12 pr-12 text-lg outline-none transition-colors placeholder-gray-400 font-medium
                                 ${isStatusMode ? 'border-amber-200 focus:border-amber-400 bg-amber-50/30' : 'border-gray-100 focus:border-[#991b1b]'}`}
                             autoFocus
                         />
                         {searchQuery && (
-                            <button onClick={() => setSearchQuery('')} className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-700 bg-gray-200 hover:bg-gray-300 p-1.5 rounded-full transition-colors">
-                                <X size={20} />
+                            <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-700 bg-gray-200 hover:bg-gray-300 p-1 rounded-full transition-colors">
+                                <X size={16} />
                             </button>
                         )}
                     </div>
                 </div>
 
-                {/* Resultat-liste */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {!searchQuery ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-300">
-                            <Search size={60} className="mb-4 opacity-50" />
-                            <p className="text-xl font-serif text-gray-400">Find en vin i systemet</p>
+                            <Search size={48} className="mb-4 opacity-50" />
+                            <p className="text-lg font-serif text-gray-400">Søg for at finde vin</p>
                         </div>
                     ) : (
                         filteredWines.map(wine => {
@@ -144,18 +140,15 @@ export default function KaelderTouch() {
                                 <div 
                                     key={wine.id} 
                                     onClick={() => setSelectedWine(wine)}
-                                    className={`p-5 rounded-2xl cursor-pointer transition-all border-2 ${isSelected ? 'border-[#991b1b] bg-red-50' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
+                                    className={`p-4 rounded-xl cursor-pointer transition-all border-2 ${isSelected ? 'border-[#991b1b] bg-red-50' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
                                 >
-                                    <p className={`text-xl font-bold mb-1 ${isSelected ? 'text-[#991b1b]' : 'text-gray-900'}`}>{wine.producer}</p>
-                                    <p className="text-gray-500 mb-3 line-clamp-1">{wine.name} - {wine.year}</p>
-                                    
+                                    <p className={`text-lg font-bold mb-1 leading-tight ${isSelected ? 'text-[#991b1b]' : 'text-gray-900'}`}>{wine.producer}</p>
+                                    <p className="text-gray-500 mb-2 text-sm line-clamp-1">{wine.name} - {wine.year}</p>
                                     <div className="flex justify-between items-end">
-                                        <div className="flex gap-2">
-                                            <span className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-500 uppercase">{wine.type}</span>
-                                        </div>
+                                        <span className="px-2 py-1 bg-white border border-gray-200 rounded text-[10px] font-bold text-gray-500 uppercase">{wine.type}</span>
                                         <div className="text-right">
-                                            <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-0.5">Lager</p>
-                                            <p className="text-lg font-black text-gray-900 leading-none">{wine.stockCount || 0}</p>
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Lager</p>
+                                            <p className="text-base font-black text-gray-900 leading-none">{wine.stockCount || 0}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -165,75 +158,53 @@ export default function KaelderTouch() {
                 </div>
             </div>
 
-            {/* HØJRE SPALTE: Detaljer & Kort (Ca. 55% bredde) */}
-            <div className="w-[55%] flex flex-col bg-white rounded-[2rem] shadow-lg border border-gray-100 p-8 overflow-y-auto relative">
+            {/* HØJRE SPALTE: Kort eller Tæller */}
+            <div className="w-2/3 flex flex-col bg-white rounded-[2rem] shadow-lg border border-gray-100 p-6 relative">
                 {!selectedWine ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-300">
-                        <MapPin size={80} className="mb-6 opacity-50" />
-                        <p className="text-2xl font-serif text-gray-400">Vælg en vin i listen for at se detaljer</p>
+                        <MapPin size={64} className="mb-4 opacity-50" />
+                        <p className="text-xl font-serif text-gray-400">Vælg en vin for at se detaljer</p>
                     </div>
                 ) : (
                     <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-200">
-                        {/* Hovedinfo om vinen i toppen */}
-                        <div className="mb-8 pb-8 border-b border-gray-100 flex justify-between items-start">
+                        {/* Vin Info */}
+                        <div className="mb-6 pb-6 border-b border-gray-100 flex justify-between items-start">
                             <div>
-                                <h2 className="text-4xl font-bold font-serif text-gray-900 mb-2">{selectedWine.producer}</h2>
-                                <h3 className="text-2xl text-gray-500">{selectedWine.name} - {selectedWine.year}</h3>
+                                <h2 className="text-3xl font-bold font-serif text-gray-900 mb-1">{selectedWine.producer}</h2>
+                                <h3 className="text-xl text-gray-500">{selectedWine.name} - {selectedWine.year}</h3>
                             </div>
-                            <button onClick={() => setSelectedWine(null)} className="p-3 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-400 transition-colors">
+                            <button onClick={() => setSelectedWine(null)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-400 transition-colors">
                                 <X size={24} />
                             </button>
                         </div>
 
                         {isStatusMode ? (
-                            /* STATUS MODE: Gigantiske tælleknapper */
+                            /* STATUS MODE */
                             <div className="flex-1 flex flex-col items-center justify-center pb-10">
-                                <p className="text-xl text-gray-400 uppercase tracking-widest font-bold mb-12">Lagerbeholdning</p>
-                                
-                                <div className="flex items-center gap-10 bg-gray-50 p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                                    <button 
-                                        onClick={() => handleStockChange(selectedWine, -1)}
-                                        className="w-28 h-28 bg-white rounded-full flex items-center justify-center text-red-600 hover:bg-red-50 active:scale-90 transition-all border-2 border-red-100 shadow-sm"
-                                    >
-                                        <Minus size={48} />
-                                    </button>
-                                    
-                                    <div className="w-48 text-center">
-                                        <p className="text-[7rem] font-black leading-none text-gray-900">{selectedWine.stockCount || 0}</p>
-                                    </div>
-                                    
-                                    <button 
-                                        onClick={() => handleStockChange(selectedWine, 1)}
-                                        className="w-28 h-28 bg-white rounded-full flex items-center justify-center text-green-600 hover:bg-green-50 active:scale-90 transition-all border-2 border-green-100 shadow-sm"
-                                    >
-                                        <Plus size={48} />
-                                    </button>
+                                <p className="text-lg text-gray-400 uppercase tracking-widest font-bold mb-8">Lagerbeholdning</p>
+                                <div className="flex items-center gap-10 bg-gray-50 p-10 rounded-[2rem] border border-gray-100 shadow-sm">
+                                    <button onClick={() => handleStockChange(selectedWine, -1)} className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-red-600 hover:bg-red-50 active:scale-90 transition-all border-2 border-red-100 shadow-sm"><Minus size={40} /></button>
+                                    <div className="w-40 text-center"><p className="text-[6rem] font-black leading-none text-gray-900">{selectedWine.stockCount || 0}</p></div>
+                                    <button onClick={() => handleStockChange(selectedWine, 1)} className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-green-600 hover:bg-green-50 active:scale-90 transition-all border-2 border-green-100 shadow-sm"><Plus size={40} /></button>
                                 </div>
                             </div>
                         ) : (
-                            /* KORT MODE: Vis kælderen */
-                            <div className="flex-1 flex flex-col">
-                                {/* Skab og hylde indikator i toppen */}
-                                <div className="flex justify-center gap-4 mb-10">
-                                    <div className="flex items-center gap-4 bg-red-50 border border-red-100 px-8 py-4 rounded-2xl">
-                                        <MapPin size={32} className="text-[#991b1b]" />
+                            /* DET FYSISKE KÆLDERKORT */
+                            <div className="flex-1 flex flex-col min-h-0">
+                                <div className="flex justify-center gap-4 mb-4">
+                                    <div className="flex items-center gap-3 bg-red-50 border border-red-100 px-6 py-3 rounded-xl shadow-sm">
+                                        <MapPin size={24} className="text-[#991b1b]" />
                                         <div>
-                                            <p className="text-2xl font-bold text-gray-900">Skab {selectedWine.wineCabinet || '?'}</p>
-                                            <p className="text-lg text-[#991b1b] font-medium">Hylde {selectedWine.shelf || '?'}</p>
+                                            <p className="text-lg font-bold text-gray-900 leading-tight">Skab {selectedWine.wineCabinet || '?'}</p>
+                                            <p className="text-sm text-[#991b1b] font-medium leading-tight">Hylde {selectedWine.shelf || '?'}</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Selve det grafiske kort */}
                                 {!selectedWine.wineCabinet || !CELLAR_MAP[selectedWine.wineCabinet] ? (
-                                    <div className="flex-1 flex items-center justify-center text-gray-400 text-xl italic bg-gray-50 rounded-3xl border border-gray-100">
-                                        Lokationen findes ikke på kortet endnu.
-                                    </div>
+                                    <div className="flex-1 flex items-center justify-center text-gray-400 text-lg italic bg-gray-50 rounded-2xl border border-gray-100">Lokationen findes ikke på kortet endnu.</div>
                                 ) : (
-                                    <div className="flex-1 grid grid-cols-2 gap-8">
-                                        <RoomMap title="Rum 1" cabinets={[1,2,3,4,5,6]} targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
-                                        <RoomMap title="Rum 2" cabinets={[7,8,9,10,11,12]} targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
-                                    </div>
+                                    <PhysicalCellarMap targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
                                 )}
                             </div>
                         )}
@@ -244,41 +215,98 @@ export default function KaelderTouch() {
     );
 }
 
-// HJÆLPEKOMPONENT: Lyst tema til rum-kortet
-function RoomMap({ title, cabinets, targetCabinet, targetShelf }) {
-    const isTargetRoom = cabinets.includes(parseInt(targetCabinet));
+// ============================================================================
+// MAGIEN: DET FYSISKE KÆLDERKORT (RENSKREVET UDEN VINREOLER)
+// ============================================================================
+function PhysicalCellarMap({ targetCabinet, targetShelf }) {
+    return (
+        <div className="flex-1 flex gap-4 w-full h-full pb-2">
+            
+            {/* RUM 2 (Venstre på din tegning) */}
+            <div className="flex-1 bg-gray-50 rounded-2xl border-2 border-gray-200 p-4 relative flex flex-col">
+                <h3 className="text-center text-gray-400 font-bold mb-2 uppercase tracking-widest text-xs">Rum 2</h3>
+                
+                <div className="flex-1 grid grid-cols-5 grid-rows-5 gap-2 relative h-full">
+                    
+                    {/* Dør mod Rum 1 */}
+                    <div className="col-start-5 row-start-1 flex items-center justify-end text-gray-400 text-xs font-bold pr-1">Dør ➔</div>
+
+                    {/* Skab 7 (Venstre side) */}
+                    <div className="col-start-1 row-start-2 row-span-2">
+                        <Cabinet num={7} targetCabinet={targetCabinet} targetShelf={targetShelf} />
+                    </div>
+
+                    {/* Bund Skabe: 8, 9, 10, 11, 12 */}
+                    <div className="col-start-1 row-start-5"><Cabinet num={8} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-2 row-start-5"><Cabinet num={9} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-3 row-start-5"><Cabinet num={10} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-4 row-start-5"><Cabinet num={11} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-5 row-start-5"><Cabinet num={12} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                </div>
+            </div>
+
+            {/* RUM 1 (Højre på din tegning) */}
+            <div className="flex-1 bg-gray-50 rounded-2xl border-2 border-gray-200 p-4 relative flex flex-col">
+                <h3 className="text-center text-gray-400 font-bold mb-2 uppercase tracking-widest text-xs">Rum 1</h3>
+                
+                <div className="flex-1 grid grid-cols-4 grid-rows-5 gap-2 relative h-full">
+                    
+                    {/* Skab 4, 5 (Top Venstre) */}
+                    <div className="col-start-1 row-start-1"><Cabinet num={4} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-2 row-start-1"><Cabinet num={5} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+
+                    {/* Dør / Indgang (Top Midt) */}
+                    <div className="col-start-3 row-start-1 flex items-start pt-1 justify-center text-gray-400 text-xs font-bold">Dør</div>
+
+                    {/* Skab 6 (Top Højre) */}
+                    <div className="col-start-4 row-start-1"><Cabinet num={6} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+
+                    {/* Dør til Rum 2 */}
+                    <div className="col-start-1 row-start-2 flex items-center justify-start text-gray-400 text-xs font-bold pl-1"> Rum 2</div>
+
+                    {/* "Du står her" - Svæver i midten */}
+                    <div className="col-start-2 col-span-2 row-start-3 flex items-center justify-center relative">
+                        <div className="flex flex-col items-center text-[#991b1b] animate-pulse">
+                            <Star size={24} />
+                            <span className="text-[10px] font-black uppercase mt-1 whitespace-nowrap">Dig</span>
+                        </div>
+                    </div>
+
+                    {/* Bund Skabe: 1, 2, 3 */}
+                    <div className="col-start-1 row-start-5"><Cabinet num={1} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-2 row-start-5"><Cabinet num={2} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                    <div className="col-start-3 row-start-5"><Cabinet num={3} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
+                </div>
+            </div>
+
+        </div>
+    );
+}
+
+// Hjælpekomponent: Tegner et enkelt skab med dynamiske hylder
+function Cabinet({ num, targetCabinet, targetShelf }) {
+    const cabData = CELLAR_MAP[num];
+    if (!cabData) return null;
+    
+    const isTargetCab = parseInt(targetCabinet) === num;
 
     return (
-        <div className={`p-5 rounded-3xl border-2 transition-all flex flex-col ${isTargetRoom ? 'border-[#991b1b] bg-white shadow-md' : 'border-gray-200 bg-gray-50/50'}`}>
-            <h4 className={`text-lg font-bold text-center mb-4 uppercase tracking-widest ${isTargetRoom ? 'text-[#991b1b]' : 'text-gray-400'}`}>{title}</h4>
-            
-            <div className="grid grid-cols-3 gap-3 flex-1 content-start">
-                {cabinets.map(cabNum => {
-                    const cabData = CELLAR_MAP[cabNum];
-                    if (!cabData) return null;
-                    
-                    const isTargetCab = parseInt(targetCabinet) === cabNum;
+        <div className={`w-full h-full flex flex-col border rounded-lg overflow-hidden transition-all ${isTargetCab ? 'border-[#991b1b] shadow-xl scale-110 z-10' : 'border-gray-200 opacity-70 bg-white'}`}>
+            <div className={`text-center py-0.5 font-bold text-[10px] uppercase tracking-wider ${isTargetCab ? 'bg-[#991b1b] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                {num}
+            </div>
+            {/* Flex-1 min-h-0 sikrer at hylderne tilpasser sig højden, selv hvis der er 11 hylder */}
+            <div className="flex-1 p-1 flex flex-col gap-[2px] bg-white justify-center min-h-0">
+                {Array.from({ length: cabData.shelves }).map((_, i) => {
+                    const shelfNumber = cabData.start + i;
+                    const isTargetShelf = isTargetCab && parseInt(targetShelf) === shelfNumber;
                     
                     return (
-                        <div key={cabNum} className={`flex flex-col border rounded-xl overflow-hidden transition-all ${isTargetCab ? 'border-[#991b1b] shadow-lg scale-105' : 'border-gray-200 opacity-60 bg-white'}`}>
-                            <div className={`text-center py-1.5 font-bold text-xs uppercase tracking-wider ${isTargetCab ? 'bg-[#991b1b] text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                Skab {cabNum}
-                            </div>
-                            <div className="flex-1 p-2 flex flex-col gap-1.5 bg-white justify-center">
-                                {Array.from({ length: cabData.shelves }).map((_, i) => {
-                                    const shelfNumber = cabData.start + i;
-                                    const isTargetShelf = isTargetCab && parseInt(targetShelf) === shelfNumber;
-                                    
-                                    return (
-                                        <div 
-                                            key={i} 
-                                            className={`h-2.5 rounded-sm transition-all ${isTargetShelf ? 'bg-[#991b1b] shadow-[0_0_8px_rgba(153,27,27,0.5)]' : 'bg-gray-100'}`}
-                                            title={`Hylde ${shelfNumber}`}
-                                        ></div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <div 
+                            key={i} 
+                            className={`flex-1 rounded-sm transition-all min-h-[3px] ${isTargetShelf ? 'bg-[#991b1b] shadow-[0_0_8px_rgba(153,27,27,0.8)]' : 'bg-gray-100'}`}
+                            title={`Hylde ${shelfNumber}`}
+                        ></div>
                     );
                 })}
             </div>
