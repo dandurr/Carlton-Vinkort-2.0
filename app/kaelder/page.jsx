@@ -6,8 +6,8 @@ import { db } from '@/lib/firebase';
 import Link from 'next/link';
 
 // Ikoner
-const Search = ({size=32, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
-const X = ({size=32, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
+const Search = ({size=28, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
+const X = ({size=28, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
 const MapPin = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
 const Package = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>;
 const Plus = ({size=40, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
@@ -18,7 +18,7 @@ const Home = ({size=24, className=""}) => <svg width={size} height={size} viewBo
 const CELLAR_MAP = {
     1: { shelves: 4, start: 1, room: 1 },
     2: { shelves: 4, start: 1, room: 1 },
-    3: { shelves: 8, start: 2, room: 1 }, // Starter ved 2 (altså 2, 3, 4, 5, 6, 7, 8, 9)
+    3: { shelves: 8, start: 2, room: 1 },
     4: { shelves: 2, start: 1, room: 1 },
     5: { shelves: 2, start: 1, room: 1 },
     6: { shelves: 2, start: 1, room: 1 },
@@ -34,7 +34,7 @@ export default function KaelderTouch() {
     const [wines, setWines] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedWine, setSelectedWine] = useState(null);
-    const [isStatusMode, setIsStatusMode] = useState(false); // Skifter mellem "Find Vin" og "Tæl Vin"
+    const [isStatusMode, setIsStatusMode] = useState(false);
 
     useEffect(() => {
         const unsub = onSnapshot(collection(db, 'wines'), (snapshot) => {
@@ -46,206 +46,174 @@ export default function KaelderTouch() {
     }, []);
 
     const filteredWines = wines.filter(w => {
-        if (!searchQuery) return false; // Vis intet hvis der ikke er søgt endnu (for at holde touch-skærmen ren)
+        if (!searchQuery) return false;
         const terms = searchQuery.toLowerCase().split(' ').filter(Boolean);
         const text = [w.producer, w.name, w.type, w.grapes, w.sku, w.region, w.classification, w.country, w.note].join(' ').toLowerCase();
         return terms.every(t => text.includes(t));
-    }).slice(0, 15); // Vis kun top 15 så det ikke bliver for tungt på en touchskærm
+    }).slice(0, 20);
 
     const handleStockChange = async (wine, change) => {
         const newStock = (parseFloat(wine.stockCount) || 0) + change;
-        
         try {
             await updateDoc(doc(db, 'wines', wine.id), { 
                 stockCount: newStock,
                 isSoldOut: newStock <= 0,
                 updatedAt: new Date().toISOString()
             });
-            
-            // Log handlingen
             await addDoc(collection(db, 'history_logs'), {
                 wineName: `${wine.producer} ${wine.name || ''}`,
                 action: `Touch-skærm: Lager justeret med ${change > 0 ? '+'+change : change} (nu: ${newStock})`,
                 createdAt: new Date().toISOString()
             });
-
-            // Opdater lokalt så skærmen reagerer lynhurtigt
             setSelectedWine({...wine, stockCount: newStock});
-        } catch (error) {
-            console.error("Fejl ved opdatering:", error);
-        }
+        } catch (error) { console.error("Fejl:", error); }
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-red-900 overflow-hidden">
+        <div className="h-screen w-screen bg-[#FDFBF7] text-gray-900 font-sans flex p-4 gap-4 overflow-hidden selection:bg-[#991b1b] selection:text-white">
             
-            {/* TOP BAR */}
-            <header className="bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-center shadow-xl">
-                <div className="flex items-center gap-6">
-                    <Link href="/admin" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl transition-colors">
-                        <Home size={28} className="text-slate-400" />
+            {/* VENSTRE SPALTE: Søgning & Liste (Ca. 45% bredde) */}
+            <div className="w-[45%] flex flex-col bg-white rounded-[2rem] shadow-lg border border-gray-100 overflow-hidden">
+                {/* Header i venstre spalte */}
+                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <Link href="/admin" className="p-3 bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-gray-700 shadow-sm transition-colors">
+                        <Home size={24} />
                     </Link>
-                    <div>
-                        <h1 className="text-3xl font-bold font-serif text-white tracking-wide">Kælder Dashboard</h1>
-                        <p className="text-slate-400 text-lg">Hurtig adgang for personale</p>
-                    </div>
-                </div>
-                
-                {/* STATUS MODE TOGGLE */}
-                <button 
-                    onClick={() => { setIsStatusMode(!isStatusMode); setSelectedWine(null); }}
-                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-xl transition-all ${isStatusMode ? 'bg-amber-500 text-slate-900 shadow-[0_0_20px_rgba(245,158,11,0.3)]' : 'bg-slate-800 text-slate-300'}`}
-                >
-                    <Package size={28}/> 
-                    {isStatusMode ? 'STATUS TILSTAND ER AKTIV' : 'SKIFT TIL STATUS TILSTAND'}
-                </button>
-            </header>
-
-            {/* HOVEDOMRÅDE */}
-            <div className="p-6 h-[calc(100vh-110px)] flex flex-col">
-                
-                {/* KÆMPE SØGEFELT */}
-                <div className="relative mb-6">
-                    <Search className="absolute left-8 top-1/2 transform -translate-y-1/2 text-slate-500" />
-                    <input 
-                        type="text" 
-                        placeholder={isStatusMode ? "Søg efter vin til optælling..." : "Søg efter vin for at finde lokation..."}
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className={`w-full bg-slate-900 border-4 rounded-3xl py-8 pl-24 pr-8 text-4xl outline-none transition-colors placeholder-slate-600 font-medium shadow-2xl
-                            ${isStatusMode ? 'border-amber-500/50 focus:border-amber-500' : 'border-slate-800 focus:border-red-900'}`}
-                        autoFocus
-                    />
-                    {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="absolute right-8 top-1/2 transform -translate-y-1/2 text-slate-500 bg-slate-800 p-2 rounded-full">
-                            <X size={28} />
-                        </button>
-                    )}
+                    <button 
+                        onClick={() => { setIsStatusMode(!isStatusMode); setSelectedWine(null); }}
+                        className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${isStatusMode ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Package size={18}/> 
+                        {isStatusMode ? 'STATUS TILSTAND' : 'SKIFT TIL STATUS'}
+                    </button>
                 </div>
 
-                {/* SØGERESULTATER */}
-                {!selectedWine && (
-                    <div className="flex-1 overflow-y-auto pr-2 pb-20">
-                        {!searchQuery ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-6">
-                                <Search size={80} className="opacity-20" />
-                                <p className="text-3xl font-serif">Brug søgefeltet til at finde en vin</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {filteredWines.map(wine => (
-                                    <div 
-                                        key={wine.id} 
-                                        onClick={() => setSelectedWine(wine)}
-                                        className="bg-slate-900 border border-slate-800 p-8 rounded-3xl cursor-pointer hover:bg-slate-800 active:scale-95 transition-all shadow-lg flex justify-between items-center"
-                                    >
-                                        <div>
-                                            <p className="text-3xl font-bold text-white mb-2">{wine.producer}</p>
-                                            <p className="text-xl text-slate-400 mb-4">{wine.name}</p>
-                                            <div className="flex gap-3">
-                                                <span className="px-4 py-2 bg-slate-950 rounded-lg text-sm font-bold text-slate-300 uppercase">{wine.type}</span>
-                                                <span className="px-4 py-2 bg-slate-950 rounded-lg text-sm font-bold text-slate-300">{wine.year}</span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="text-right">
-                                            {isStatusMode ? (
-                                                <div className="bg-amber-500 text-slate-900 px-6 py-4 rounded-2xl text-center">
-                                                    <p className="text-sm font-bold uppercase tracking-widest">På lager</p>
-                                                    <p className="text-4xl font-black">{wine.stockCount || 0}</p>
-                                                </div>
-                                            ) : (
-                                                <div className="bg-slate-950 border border-slate-800 px-6 py-4 rounded-2xl text-center">
-                                                    <MapPin size={24} className="mx-auto text-red-700 mb-1" />
-                                                    <p className="text-slate-300 font-bold">Skab {wine.wineCabinet || '?'}</p>
-                                                    <p className="text-slate-500 text-sm">Hylde {wine.shelf || '?'}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                {/* Kæmpe søgefelt */}
+                <div className="p-6 border-b border-gray-100">
+                    <div className="relative">
+                        <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Søg..."
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className={`w-full bg-gray-50 border-2 rounded-2xl py-6 pl-16 pr-16 text-2xl outline-none transition-colors placeholder-gray-400 font-medium
+                                ${isStatusMode ? 'border-amber-200 focus:border-amber-400 bg-amber-50/30' : 'border-gray-100 focus:border-[#991b1b]'}`}
+                            autoFocus
+                        />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-700 bg-gray-200 hover:bg-gray-300 p-1.5 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
                         )}
                     </div>
-                )}
+                </div>
 
-                {/* MODAL / VISNING AF EN ENKELT VIN */}
-                {selectedWine && (
-                    <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 p-8 flex flex-col shadow-2xl animate-in slide-in-from-bottom-10">
-                        <div className="flex justify-between items-start mb-8 border-b border-slate-800 pb-8">
+                {/* Resultat-liste */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {!searchQuery ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-300">
+                            <Search size={60} className="mb-4 opacity-50" />
+                            <p className="text-xl font-serif text-gray-400">Find en vin i systemet</p>
+                        </div>
+                    ) : (
+                        filteredWines.map(wine => {
+                            const isSelected = selectedWine?.id === wine.id;
+                            return (
+                                <div 
+                                    key={wine.id} 
+                                    onClick={() => setSelectedWine(wine)}
+                                    className={`p-5 rounded-2xl cursor-pointer transition-all border-2 ${isSelected ? 'border-[#991b1b] bg-red-50' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
+                                >
+                                    <p className={`text-xl font-bold mb-1 ${isSelected ? 'text-[#991b1b]' : 'text-gray-900'}`}>{wine.producer}</p>
+                                    <p className="text-gray-500 mb-3 line-clamp-1">{wine.name} - {wine.year}</p>
+                                    
+                                    <div className="flex justify-between items-end">
+                                        <div className="flex gap-2">
+                                            <span className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-500 uppercase">{wine.type}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-0.5">Lager</p>
+                                            <p className="text-lg font-black text-gray-900 leading-none">{wine.stockCount || 0}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
+            </div>
+
+            {/* HØJRE SPALTE: Detaljer & Kort (Ca. 55% bredde) */}
+            <div className="w-[55%] flex flex-col bg-white rounded-[2rem] shadow-lg border border-gray-100 p-8 overflow-y-auto relative">
+                {!selectedWine ? (
+                    <div className="h-full flex flex-col items-center justify-center text-gray-300">
+                        <MapPin size={80} className="mb-6 opacity-50" />
+                        <p className="text-2xl font-serif text-gray-400">Vælg en vin i listen for at se detaljer</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-200">
+                        {/* Hovedinfo om vinen i toppen */}
+                        <div className="mb-8 pb-8 border-b border-gray-100 flex justify-between items-start">
                             <div>
-                                <h2 className="text-5xl font-bold font-serif text-white mb-2">{selectedWine.producer}</h2>
-                                <h3 className="text-3xl text-slate-400">{selectedWine.name} - {selectedWine.year}</h3>
+                                <h2 className="text-4xl font-bold font-serif text-gray-900 mb-2">{selectedWine.producer}</h2>
+                                <h3 className="text-2xl text-gray-500">{selectedWine.name} - {selectedWine.year}</h3>
                             </div>
-                            <button onClick={() => setSelectedWine(null)} className="p-4 bg-slate-800 rounded-full text-slate-400 hover:text-white">
-                                <X size={40} />
+                            <button onClick={() => setSelectedWine(null)} className="p-3 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-400 transition-colors">
+                                <X size={24} />
                             </button>
                         </div>
 
                         {isStatusMode ? (
-                            /* STATUS MODE UI (Kæmpe knapper) */
-                            <div className="flex-1 flex flex-col items-center justify-center">
-                                <p className="text-2xl text-slate-500 uppercase tracking-widest font-bold mb-10">Aktuel Lagerbeholdning</p>
+                            /* STATUS MODE: Gigantiske tælleknapper */
+                            <div className="flex-1 flex flex-col items-center justify-center pb-10">
+                                <p className="text-xl text-gray-400 uppercase tracking-widest font-bold mb-12">Lagerbeholdning</p>
                                 
-                                <div className="flex items-center gap-12 bg-slate-950 p-12 rounded-[3rem] border border-slate-800 shadow-2xl">
+                                <div className="flex items-center gap-10 bg-gray-50 p-10 rounded-[3rem] border border-gray-100 shadow-sm">
                                     <button 
                                         onClick={() => handleStockChange(selectedWine, -1)}
-                                        className="w-32 h-32 bg-slate-800 rounded-full flex items-center justify-center text-red-500 hover:bg-slate-700 active:scale-90 transition-all border-4 border-slate-700"
+                                        className="w-28 h-28 bg-white rounded-full flex items-center justify-center text-red-600 hover:bg-red-50 active:scale-90 transition-all border-2 border-red-100 shadow-sm"
                                     >
-                                        <Minus />
+                                        <Minus size={48} />
                                     </button>
                                     
-                                    <div className="w-64 text-center">
-                                        <p className="text-[8rem] font-black leading-none text-white">{selectedWine.stockCount || 0}</p>
+                                    <div className="w-48 text-center">
+                                        <p className="text-[7rem] font-black leading-none text-gray-900">{selectedWine.stockCount || 0}</p>
                                     </div>
                                     
                                     <button 
                                         onClick={() => handleStockChange(selectedWine, 1)}
-                                        className="w-32 h-32 bg-slate-800 rounded-full flex items-center justify-center text-green-500 hover:bg-slate-700 active:scale-90 transition-all border-4 border-slate-700"
+                                        className="w-28 h-28 bg-white rounded-full flex items-center justify-center text-green-600 hover:bg-green-50 active:scale-90 transition-all border-2 border-green-100 shadow-sm"
                                     >
-                                        <Plus />
+                                        <Plus size={48} />
                                     </button>
                                 </div>
-                                <p className="text-slate-500 mt-12 text-xl italic">Ændringer gemmes i systemet med det samme.</p>
                             </div>
                         ) : (
-                            /* FIND VIN UI (Visuelt kort) */
-                            <div className="flex-1 flex gap-12">
-                                {/* Venstre: Detaljer */}
-                                <div className="w-1/3 bg-slate-950 p-8 rounded-3xl border border-slate-800">
-                                    <p className="text-xl text-slate-500 uppercase tracking-widest font-bold mb-8">Lokation</p>
-                                    
-                                    <div className="flex items-center gap-6 mb-8 bg-red-900/20 border border-red-900 p-6 rounded-2xl">
-                                        <MapPin size={48} className="text-red-500" />
+                            /* KORT MODE: Vis kælderen */
+                            <div className="flex-1 flex flex-col">
+                                {/* Skab og hylde indikator i toppen */}
+                                <div className="flex justify-center gap-4 mb-10">
+                                    <div className="flex items-center gap-4 bg-red-50 border border-red-100 px-8 py-4 rounded-2xl">
+                                        <MapPin size={32} className="text-[#991b1b]" />
                                         <div>
-                                            <p className="text-4xl font-bold text-white">Skab {selectedWine.wineCabinet || '?'}</p>
-                                            <p className="text-2xl text-red-400">Hylde {selectedWine.shelf || '?'}</p>
+                                            <p className="text-2xl font-bold text-gray-900">Skab {selectedWine.wineCabinet || '?'}</p>
+                                            <p className="text-lg text-[#991b1b] font-medium">Hylde {selectedWine.shelf || '?'}</p>
                                         </div>
                                     </div>
-
-                                    {selectedWine.stockCount > 0 ? (
-                                        <div className="p-6 bg-slate-900 rounded-2xl border border-slate-800 text-center">
-                                            <p className="text-slate-400 mb-1">På lager</p>
-                                            <p className="text-4xl font-bold text-white">{selectedWine.stockCount} fl.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="p-6 bg-red-900/30 rounded-2xl border border-red-900 text-center text-red-400 font-bold text-xl">
-                                            Udsolgt
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* Højre: Grafisk kort over kælderen */}
-                                <div className="w-2/3 bg-slate-950 p-8 rounded-3xl border border-slate-800 flex flex-col justify-center">
-                                    {!selectedWine.wineCabinet || !CELLAR_MAP[selectedWine.wineCabinet] ? (
-                                        <div className="text-center text-slate-500 text-2xl italic">Lokationen for denne vin findes ikke på kortet endnu.</div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-12 h-full">
-                                            <RoomMap title="Rum 1" cabinets={[1,2,3,4,5,6]} targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
-                                            <RoomMap title="Rum 2" cabinets={[7,8,9,10,11,12]} targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
-                                        </div>
-                                    )}
-                                </div>
+                                {/* Selve det grafiske kort */}
+                                {!selectedWine.wineCabinet || !CELLAR_MAP[selectedWine.wineCabinet] ? (
+                                    <div className="flex-1 flex items-center justify-center text-gray-400 text-xl italic bg-gray-50 rounded-3xl border border-gray-100">
+                                        Lokationen findes ikke på kortet endnu.
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 grid grid-cols-2 gap-8">
+                                        <RoomMap title="Rum 1" cabinets={[1,2,3,4,5,6]} targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
+                                        <RoomMap title="Rum 2" cabinets={[7,8,9,10,11,12]} targetCabinet={selectedWine.wineCabinet} targetShelf={selectedWine.shelf} />
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -255,15 +223,15 @@ export default function KaelderTouch() {
     );
 }
 
-// HJÆLPEKOMPONENT: Tegner et enkelt rum med skabe
+// HJÆLPEKOMPONENT: Lyst tema til rum-kortet
 function RoomMap({ title, cabinets, targetCabinet, targetShelf }) {
     const isTargetRoom = cabinets.includes(parseInt(targetCabinet));
 
     return (
-        <div className={`p-6 rounded-3xl border-4 transition-all ${isTargetRoom ? 'border-red-900 bg-slate-900/50' : 'border-slate-800/50 bg-slate-900/20'}`}>
-            <h4 className={`text-2xl font-bold text-center mb-6 uppercase tracking-widest ${isTargetRoom ? 'text-red-500' : 'text-slate-600'}`}>{title}</h4>
+        <div className={`p-5 rounded-3xl border-2 transition-all flex flex-col ${isTargetRoom ? 'border-[#991b1b] bg-white shadow-md' : 'border-gray-200 bg-gray-50/50'}`}>
+            <h4 className={`text-lg font-bold text-center mb-4 uppercase tracking-widest ${isTargetRoom ? 'text-[#991b1b]' : 'text-gray-400'}`}>{title}</h4>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3 flex-1 content-start">
                 {cabinets.map(cabNum => {
                     const cabData = CELLAR_MAP[cabNum];
                     if (!cabData) return null;
@@ -271,12 +239,11 @@ function RoomMap({ title, cabinets, targetCabinet, targetShelf }) {
                     const isTargetCab = parseInt(targetCabinet) === cabNum;
                     
                     return (
-                        <div key={cabNum} className={`flex flex-col border-2 rounded-lg overflow-hidden transition-all ${isTargetCab ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'border-slate-800 opacity-50'}`}>
-                            <div className={`text-center py-2 font-bold text-sm ${isTargetCab ? 'bg-red-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                        <div key={cabNum} className={`flex flex-col border rounded-xl overflow-hidden transition-all ${isTargetCab ? 'border-[#991b1b] shadow-lg scale-105' : 'border-gray-200 opacity-60 bg-white'}`}>
+                            <div className={`text-center py-1.5 font-bold text-xs uppercase tracking-wider ${isTargetCab ? 'bg-[#991b1b] text-white' : 'bg-gray-100 text-gray-500'}`}>
                                 Skab {cabNum}
                             </div>
-                            <div className="flex-1 p-2 flex flex-col gap-1 bg-slate-950">
-                                {/* Tegner hylderne. Vi udregner nummeret baseret på 'start' */}
+                            <div className="flex-1 p-2 flex flex-col gap-1.5 bg-white justify-center">
                                 {Array.from({ length: cabData.shelves }).map((_, i) => {
                                     const shelfNumber = cabData.start + i;
                                     const isTargetShelf = isTargetCab && parseInt(targetShelf) === shelfNumber;
@@ -284,7 +251,7 @@ function RoomMap({ title, cabinets, targetCabinet, targetShelf }) {
                                     return (
                                         <div 
                                             key={i} 
-                                            className={`h-4 rounded-sm transition-all ${isTargetShelf ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]' : 'bg-slate-800'}`}
+                                            className={`h-2.5 rounded-sm transition-all ${isTargetShelf ? 'bg-[#991b1b] shadow-[0_0_8px_rgba(153,27,27,0.5)]' : 'bg-gray-100'}`}
                                             title={`Hylde ${shelfNumber}`}
                                         ></div>
                                     );
