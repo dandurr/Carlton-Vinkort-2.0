@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 // Tilføjet setDoc heroppe!
-import { collection, onSnapshot, doc, addDoc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, addDoc, setDoc, arrayUnion } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 
 // --- ICONS ---
@@ -302,15 +302,20 @@ function WineDetailsModal({ wine, onClose }) {
   }, [wine]);
 
   const handleSendToCellar = async (wineObj) => {
+    setSentToCellar(true);
+    setTimeout(() => setSentToCellar(false), 2000); 
+
     try {
+        // Vi bruger 'arrayUnion' til at tilføje vinen bagerst i køen, uden at slette de andre!
         await setDoc(doc(db, 'wines', 'cellar_request'), {
-            wineId: wineObj.id,
-            timestamp: Date.now()
-        });
-        setSentToCellar(true);
-        setTimeout(() => setSentToCellar(false), 2000); // Skifter tilbage til tallene efter 2 sekunder
+            queue: arrayUnion({
+                wineId: wineObj.id,
+                timestamp: Date.now()
+            })
+        }, { merge: true });
     } catch (error) {
         console.error("Kunne ikke sende til kælder:", error);
+        alert("Beskeden kunne ikke sendes. Det er sandsynligvis en rettigheds-fejl i Firebase.");
     }
   };
 
