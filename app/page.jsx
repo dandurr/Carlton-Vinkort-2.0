@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, addDoc } from "firebase/firestore";
+// Tilføjet setDoc heroppe!
+import { collection, onSnapshot, doc, addDoc, setDoc } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 
 // --- ICONS ---
@@ -105,12 +106,10 @@ export default function VinkortClient() {
     if (selectedCountry) result = result.filter(w => w.country === selectedCountry);
     if (filterValues.region !== 'all') result = result.filter(w => w.region === filterValues.region);
 
-    // HER LIGGER MAGIEN: Vi kigger efter vores nye tags/flueben!
     if (activeSubFilter !== 'all') {
       if (activeSubFilter === 'carltons_udvalgte') {
         result = result.filter(w => w.carltonsChoice);
       } else {
-        // Hvis vinens "tags"-liste eksisterer, og indeholder det valgte knap-ID
         result = result.filter(w => w.tags && w.tags.includes(activeSubFilter));
       }
     }
@@ -292,10 +291,28 @@ function WineItem({ wine, onClick }) {
 }
 
 function WineDetailsModal({ wine, onClose }) {
+  const [sentToCellar, setSentToCellar] = useState(false);
+
   useEffect(() => {
-    if (wine) document.body.style.overflow = 'hidden';
+    if (wine) {
+        document.body.style.overflow = 'hidden';
+        setSentToCellar(false); // Nulstiller knappen hver gang vi åbner en ny vin
+    }
     return () => document.body.style.overflow = 'unset';
   }, [wine]);
+
+  const handleSendToCellar = async (wineObj) => {
+    try {
+        await setDoc(doc(db, 'wines', 'cellar_request'), {
+            wineId: wineObj.id,
+            timestamp: Date.now()
+        });
+        setSentToCellar(true);
+        setTimeout(() => setSentToCellar(false), 2000); // Skifter tilbage til tallene efter 2 sekunder
+    } catch (error) {
+        console.error("Kunne ikke sende til kælder:", error);
+    }
+  };
 
   if (!wine) return null;
   const displayOrigin = [wine.classification, wine.region, wine.country].filter(Boolean).join(', ');
@@ -333,7 +350,15 @@ function WineDetailsModal({ wine, onClose }) {
           </div>
 
           {(wine.wineCabinet || wine.shelf) && (
-            <div className="mt-6 text-right"><span className="text-[10px] text-gray-300 font-mono tracking-widest cursor-default select-none hover:text-gray-400 transition-colors" title="Lokation (Skab / Hylde)">{wine.wineCabinet || '-'} / {wine.shelf || '-'}</span></div>
+            <div className="mt-6 text-right">
+                <span 
+                    onClick={() => handleSendToCellar(wine)}
+                    className="text-[10px] text-gray-300 font-mono tracking-widest cursor-pointer select-none hover:text-[#991b1b] transition-colors" 
+                    title="Send til kælderskærm"
+                >
+                    {sentToCellar ? 'SENDT TIL KÆLDER' : `${wine.wineCabinet || '-'} / ${wine.shelf || '-'}`}
+                </span>
+            </div>
           )}
         </div>
       </div>

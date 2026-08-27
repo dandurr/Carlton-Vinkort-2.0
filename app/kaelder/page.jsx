@@ -35,6 +35,7 @@ export default function KaelderTouch() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedWine, setSelectedWine] = useState(null);
     const [isStatusMode, setIsStatusMode] = useState(false);
+    const [lastRequestTime, setLastRequestTime] = useState(0);
 
     useEffect(() => {
         const unsub = onSnapshot(collection(db, 'wines'), (snapshot) => {
@@ -44,6 +45,26 @@ export default function KaelderTouch() {
         });
         return () => unsub();
     }, []);
+    // NY LYTTER: Holder øje med beskeder fra restauranten!
+    useEffect(() => {
+        if (wines.length === 0) return; // Vent til vinene er indlæst
+        
+        const unsub = onSnapshot(doc(db, 'wines', 'cellar_request'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                // Hvis beskeden er ny (inden for de sidste 2 minutter) og vi ikke har set den før
+                if (data && data.wineId && data.timestamp > lastRequestTime && (Date.now() - data.timestamp < 120000)) {
+                    const requestedWine = wines.find(w => w.id === data.wineId);
+                    if (requestedWine) {
+                        setSelectedWine(requestedWine);
+                        setIsStatusMode(false); // Hop ud af status-tilstand og vis kortet!
+                        setLastRequestTime(data.timestamp); // Husk at vi har åbnet den
+                    }
+                }
+            }
+        });
+        return () => unsub();
+    }, [wines, lastRequestTime]);
 
     const filteredWines = wines.filter(w => {
         if (!searchQuery) return false;
