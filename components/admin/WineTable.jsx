@@ -1,4 +1,3 @@
-// components/admin/WineTable.jsx
 'use client';
 
 import React from 'react';
@@ -31,7 +30,6 @@ export default function WineTable({
                 <thead className="bg-gray-50 text-gray-600">
                     <tr>
                         <th className="px-6 py-4 font-bold uppercase">Producent & Vin</th>
-                        {/* NY KOLONNE TIL VINTYPE */}
                         <th className="px-4 py-4 font-bold uppercase">Type</th>
                         <th className="px-4 py-4 font-bold uppercase text-center">PLU</th>
                         <th className="px-4 py-4 font-bold uppercase text-right">Salgspris</th>
@@ -46,10 +44,17 @@ export default function WineTable({
                         <tr key={wine.id} className={`hover:bg-gray-50 transition-colors ${wine.isSoldOut ? 'bg-red-50/30' : ''}`}>
                             <td className="px-6 py-4">
                                 <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
-                                <div className="text-gray-600">{wine.name}</div>
+                                <div className="text-gray-600">
+                                    {wine.name}
+                                    {/* AOC / Klassifikation tilføjes her */}
+                                    {wine.classification && (
+                                        <span className="italic text-gray-400">
+                                            {wine.name ? ` — ${wine.classification}` : wine.classification}
+                                        </span>
+                                    )}
+                                </div>
                             </td>
                             
-                            {/* NY DATA-CELLE TIL VINTYPE */}
                             <td className="px-4 py-4">
                                 <span className="px-3 py-1 bg-gray-100 border border-gray-200 text-gray-600 rounded-md text-xs font-bold uppercase tracking-wider">
                                     {wine.type || 'Ukendt'}
