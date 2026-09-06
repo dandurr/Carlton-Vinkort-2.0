@@ -100,7 +100,7 @@ export default function VinkortClient() {
     e.preventDefault();
     if (!vipPhone) return;
 
-    // 1. Rens nummeret (fjerner alle bogstaver/mellemrum og tager kun de sidste 8 cifre)
+    // 1. Rens nummeret (tager kun de sidste 8 cifre)
     const cleanPhone = vipPhone.replace(/[^0-9]/g, '').slice(-8);
     
     if (cleanPhone.length < 8) {
@@ -110,7 +110,6 @@ export default function VinkortClient() {
 
     setVipAuthStatus('pending');
 
-    // Vi bruger telefonnummeret som selve dokument-ID'et for at gøre det nemt at finde
     const requestRef = doc(vipDb, 'vip_requests', cleanPhone);
 
     try {
@@ -118,23 +117,28 @@ export default function VinkortClient() {
         await setDoc(requestRef, {
             phone: cleanPhone,
             status: 'pending',
-            firstName: '', // Dette felt vil VIP appen udfylde, når gæsten swiper
+            firstName: '', 
             timestamp: new Date().getTime()
         });
 
-        // 3. Lyt live efter svar fra VIP Appen
+        // 3. Send Push-besked via VIP portalens API
+        // HUSK AT RETTE DOMÆNET HERUNDER TIL DIT RIGTIGE VIP-DOMÆNE
+        fetch('https://vinkort.carlton.dk/api/vinkort-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: cleanPhone })
+        }).catch(err => console.log('Kunne ikke sende push:', err));
+
+        // 4. Lyt live efter svar fra gæstens swipe
         const unsubscribe = onSnapshot(requestRef, async (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 
-                // Hvis VIP appen har ændret status til 'approved'
                 if (data.status === 'approved') {
                     setVipAuthStatus('approved');
                     setIsVip(true);
-                    // Sæt navnet (eller fallback til 'VIP Gæst', hvis den mangler navn)
                     setVipUser(data.firstName || 'VIP Gæst');
                     
-                    // Luk popup, afmeld lytteren og slet dokumentet efter 2 sekunder
                     setTimeout(async () => {
                         setShowVipLogin(false);
                         setVipAuthStatus('idle');
@@ -146,19 +150,19 @@ export default function VinkortClient() {
             }
         });
 
-        // 4. Sikkerhedsnet: Timeout efter 60 sekunder
+        // 5. Sikkerhedsnet: Timeout efter 60 sekunder
         setTimeout(async () => {
             setVipAuthStatus((currentStatus) => {
                 if (currentStatus === 'pending') {
                     unsubscribe();
-                    deleteDoc(requestRef).catch(() => {}); // Slet forældet anmodning
+                    deleteDoc(requestRef).catch(() => {});
                     setShowVipLogin(false);
                     setVipPhone('');
                     return 'idle';
                 }
                 return currentStatus;
             });
-        }, 60000); // 60.000 millisekunder = 1 minut
+        }, 60000);
 
     } catch (error) {
         console.error("Fejl ved oprettelse af VIP anmodning:", error);
