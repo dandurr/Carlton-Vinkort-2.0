@@ -123,7 +123,7 @@ export default function VinkortClient() {
 
         // 3. Send Push-besked via VIP portalens API
         // HUSK AT RETTE DOMÆNET HERUNDER TIL DIT RIGTIGE VIP-DOMÆNE
-        fetch('https://dit.carlton.dk/api/vinkort-push', {
+        fetch('https://dit.carlton.dk/api/push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phone: cleanPhone })
