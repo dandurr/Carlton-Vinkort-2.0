@@ -122,7 +122,6 @@ export default function VinkortClient() {
         });
 
         // 3. Send Push-besked via VIP portalens API
-        // HUSK AT RETTE DOMÆNET HERUNDER TIL DIT RIGTIGE VIP-DOMÆNE
         fetch('https://dit.carlton.dk/api/push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -171,27 +170,24 @@ export default function VinkortClient() {
     }
 };
 
-  // -------------------------
 // --- AUTOMATISK VIP TIMEOUT (5 MINUTTER) ---
 useEffect(() => {
   let timeoutId;
   const resetTimer = () => {
       clearTimeout(timeoutId);
-      // Hvis vi er i VIP mode, start en nedtælling på 5 minutter (300.000 millisekunder)
       if (isVip) {
           timeoutId = setTimeout(() => {
               setIsVip(false);
               setVipUser('');
-          }, 300000); // Ret dette tal hvis det skal være kortere/længere
+          }, 300000);
       }
   };
 
-  // Lyt efter enhver berøring på skærmen
   window.addEventListener('touchstart', resetTimer);
   window.addEventListener('click', resetTimer);
   window.addEventListener('scroll', resetTimer);
 
-  resetTimer(); // Start timeren når komponenten loader eller isVip skifter
+  resetTimer();
 
   return () => {
       clearTimeout(timeoutId);
@@ -288,7 +284,6 @@ useEffect(() => {
     <div className="min-h-screen bg-[#FDFBF7] text-gray-800 font-sans pb-20 relative transition-colors duration-500">
       
       {/* VIP BANNER */}
-      {/* VIP BANNER - NU KLIKBAR FOR LOG UD */}
       {isVip && (
           <div 
               onClick={() => {
@@ -308,17 +303,8 @@ useEffect(() => {
       </button>
 
       <header className="bg-white px-6 py-16 text-center shadow-sm border-b border-gray-100 relative flex flex-col items-center">
-        {/* Usynlig knap-zone omkring logoet */}
-        <div 
-            onClick={handleLogoTap} 
-            className="cursor-pointer select-none transition-transform active:scale-95 inline-block"
-        >
-            {/* Magien sker her i src: Hvis isVip er sand, vis guld. Ellers vis sort. */}
-            <img 
-                src={isVip ? "/carlton-logo-guld.png" : "/carlton-logo-sort.png"}
-                alt="Carlton Logo" 
-                className="h-16 sm:h-20 md:h-24 w-auto object-contain pointer-events-none transition-all duration-500" 
-            />
+        <div onClick={handleLogoTap} className="cursor-pointer select-none transition-transform active:scale-95 inline-block">
+            <img src={isVip ? "/carlton-logo-guld.png" : "/carlton-logo-sort.png"} alt="Carlton Logo" className="h-16 sm:h-20 md:h-24 w-auto object-contain pointer-events-none transition-all duration-500" />
         </div>
         <div className={`w-24 h-1 mx-auto mt-6 transition-colors duration-500 ${isVip ? 'bg-[#B8860B]' : 'bg-[#991b1b]'}`}></div>
         <p className="text-xl text-gray-500 mt-6 font-serif italic">Vinkort</p>
@@ -332,6 +318,7 @@ useEffect(() => {
         </div>
 
         <div className="space-y-4 mb-12">
+            {/* Filter 1: Type */}
             <div className="flex flex-wrap justify-center gap-3">
                  {['all', 'Mousserende', 'Hvidvin', 'Rødvin', 'Rosévin', 'Dessertvin'].map(type => (
                      <button key={type} onClick={() => { setActiveTypeFilter(type); setSelectedCountry(null); setFilterValues(prev => ({...prev, region: 'all'})); }} className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${activeTypeFilter === type ? (isVip ? 'bg-[#B8860B] text-white' : 'bg-[#991b1b] text-white') : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'}`}>
@@ -339,7 +326,8 @@ useEffect(() => {
                      </button>
                  ))}
             </div>
-            {/* Filter-knapper skjult for brevity - de virker præcis som før! */}
+            
+            {/* Filter 2: Lande */}
             {activeTypeFilter !== 'all' && (() => {
                 const availableCountriesForType = Array.from(new Set(wines.filter(w => w.type === activeTypeFilter && !w.isSoldOut).map(w => w.country).filter(Boolean))).sort();
                 if (availableCountriesForType.length === 0) return null;
@@ -348,6 +336,31 @@ useEffect(() => {
                         {availableCountriesForType.map(country => (
                             <button key={country} onClick={() => { setSelectedCountry(country === selectedCountry ? null : country); setFilterValues(prev => ({...prev, region: 'all'})); }} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${selectedCountry === country ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                                 {country}
+                            </button>
+                        ))}
+                    </div>
+                );
+            })()}
+
+            {/* Filter 3: Områder (Regions) */}
+            {selectedCountry && (() => {
+                const availableRegions = Array.from(new Set(
+                    wines.filter(w => w.type === activeTypeFilter && w.country === selectedCountry && !w.isSoldOut)
+                         .map(w => w.region)
+                         .filter(Boolean)
+                )).sort();
+                
+                if (availableRegions.length === 0) return null;
+                
+                return (
+                    <div className="flex flex-wrap justify-center gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                        {availableRegions.map(region => (
+                            <button 
+                                key={region} 
+                                onClick={() => setFilterValues(prev => ({...prev, region: prev.region === region ? 'all' : region}))} 
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${filterValues.region === region ? 'bg-[#1b4332] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                                {region}
                             </button>
                         ))}
                     </div>
