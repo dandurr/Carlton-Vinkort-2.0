@@ -14,8 +14,8 @@ const Loader = ({ size = 24, className = "animate-spin" }) => <svg width={size} 
 
 const formatCurrency = (amount) => (amount || 0).toLocaleString('da-DK');
 
-// Hjælpefunktion til VIP-pris (10% rabat)
-const getVipPrice = (price) => Math.round(price * 0.9);
+// Hjælpefunktion til VIP-pris (5% rabat)
+const getVipPrice = (price) => Math.round(price * 0.95);
 
 function FeedbackModal({ onClose, onSuccess }) {
     const [text, setText] = useState('');
