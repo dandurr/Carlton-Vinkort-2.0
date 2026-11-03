@@ -42,11 +42,12 @@ export default function WineTable({
                         <th className="px-6 py-4 font-bold uppercase text-center">Status</th>
                         <th className="px-6 py-4 font-bold uppercase text-center">Valg</th>
                     </tr>
-                </thead>
+                    </thead>
                 <tbody className="divide-y divide-gray-100">
                     {wines.map(wine => (
                         <tr key={wine.id} className={`hover:bg-gray-50 transition-colors ${wine.isSoldOut ? 'bg-red-50/30' : ''}`}>
-                            <td className="px-6 py-4">
+                            {/* Her er ændringen sat ind: */}
+                            <td className="px-6 py-4 max-w-[250px] whitespace-normal">
                                 <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
                                 <div className="text-gray-600">
                                     {wine.name}
