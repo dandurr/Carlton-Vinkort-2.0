@@ -13,7 +13,7 @@ export default function WineTable({
     wines, 
     onUpdateSku,
     onUpdateLocation,
-    onUpdateShelf,
+    onUpdateshelf,
     onUpdatePrice, 
     onUpdatePurchasePrice, 
     onUpdateStock, 
@@ -89,11 +89,11 @@ export default function WineTable({
                             {/* HYLDE FELTET */}
                             <td className="px-4 py-4 text-center">
                                 <input 
-                                    key={`shelf-${wine.id}-${wine.Shelf}`}
+                                    key={`shelf-${wine.id}-${wine.shelf}`}
                                     type="text" 
-                                    defaultValue={wine.Shelf}
+                                    defaultValue={wine.shelf}
                                     placeholder="Hylde" 
-                                    onBlur={(e) => onUpdateShelf && onUpdateShelf(wine, e.target.value)} 
+                                    onBlur={(e) => onUpdateshelf && onUpdateshelf(wine, e.target.value)} 
                                     className="w-20 p-2 border border-gray-200 rounded-lg text-center focus:border-[#991b1b] outline-none" 
                                 />
                             </td>
