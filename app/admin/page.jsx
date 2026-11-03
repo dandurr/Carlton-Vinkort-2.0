@@ -246,7 +246,7 @@ export default function AdminVinkort() {
   };
 
   // NYE FUNKTIONER TIL WINE CABNIET OG SHELF
-  const updateLocation = async (wine, val) => { 
+  const updatewineCabinet = async (wine, val) => { 
       const newLoc = val.trim();
       if ((wine.wineCabinet || '') === newLoc) return;
       await updateDoc(doc(db, 'wines', wine.id), { wineCabinet: newLoc, updatedAt: new Date().toISOString() }); 
