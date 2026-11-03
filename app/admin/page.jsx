@@ -113,7 +113,7 @@ export default function AdminVinkort() {
       if(w.classification) s.classifications.add(w.classification);
       if(w.region) s.regions.add(w.region);
       if(w.country) s.countries.add(w.country);
-      if(w.wineCabinet) s.locations.add(w.wineCabinet); // Henter wineCabinet til vores dropdown
+      if(w.wineCabinet) s.locations.add(w.wineCabinet); 
     });
     return { 
         producers: Array.from(s.producers).sort(), 
@@ -130,10 +130,10 @@ export default function AdminVinkort() {
       if (adminSearch) {
           const lower = adminSearch.toLowerCase();
           const terms = lower.split(/\s+/).filter(Boolean);
-          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku, w.wineCabinet].join(' ').toLowerCase().includes(t)));
+          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku, w.wineCabinet, w.shelf].join(' ').toLowerCase().includes(t)));
       }
       if (adminTypeFilter !== 'all') res = res.filter(w => w.type === adminTypeFilter);
-      if (adminLocationFilter !== 'all') res = res.filter(w => w.wineCabinet === adminLocationFilter); // Filtrerer på wineCabinet
+      if (adminLocationFilter !== 'all') res = res.filter(w => w.wineCabinet === adminLocationFilter); 
       if (adminCountryFilter !== 'all') res = res.filter(w => w.country === adminCountryFilter);
       
       res.sort((a, b) => {
@@ -245,17 +245,16 @@ export default function AdminVinkort() {
       await updateDoc(doc(db, 'wines', wine.id), { sku: newSku, updatedAt: new Date().toISOString() }); 
   };
 
-  // NYE FUNKTIONER TIL WINE CABNIET OG SHELF
-  const updatewineCabinet = async (wine, val) => { 
+  const updateWineCabinet = async (wine, val) => { 
       const newLoc = val.trim();
       if ((wine.wineCabinet || '') === newLoc) return;
       await updateDoc(doc(db, 'wines', wine.id), { wineCabinet: newLoc, updatedAt: new Date().toISOString() }); 
   };
 
-  const updateshelf = async (wine, val) => { 
-      const newshelf = val.trim();
+  const updateShelf = async (wine, val) => { 
+      const newShelf = val.trim();
       if ((wine.shelf || '') === newShelf) return;
-      await updateDoc(doc(db, 'wines', wine.id), { shelf: newshelf, updatedAt: new Date().toISOString() }); 
+      await updateDoc(doc(db, 'wines', wine.id), { shelf: newShelf, updatedAt: new Date().toISOString() }); 
   };
 
   const handleStockAdjustment = async (e) => {
@@ -401,8 +400,8 @@ export default function AdminVinkort() {
                   <WineTable 
                       wines={adminWines} 
                       onUpdateSku={updateSku} 
-                      onUpdatewineCabinet={updatewineCabinet} /* TILFØJET LOKATION */
-                      onUpdateshelf={updateshelf}       /* TILFØJET HYLDE */
+                      onUpdateWineCabinet={updateWineCabinet} 
+                      onUpdateShelf={updateShelf}       
                       onUpdatePrice={updatePrice} 
                       onUpdatePurchasePrice={updatePurchasePrice} 
                       onUpdateStock={updateStock} 

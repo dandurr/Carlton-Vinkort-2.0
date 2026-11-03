@@ -12,8 +12,8 @@ const Plus = ({size=16, className=""}) => <svg width={size} height={size} viewBo
 export default function WineTable({ 
     wines, 
     onUpdateSku,
-    onUpdateLocation,
-    onUpdateshelf,
+    onUpdateWineCabinet,
+    onUpdateShelf,
     onUpdatePrice, 
     onUpdatePurchasePrice, 
     onUpdateStock, 
@@ -46,7 +46,7 @@ export default function WineTable({
                 <tbody className="divide-y divide-gray-100">
                     {wines.map(wine => (
                         <tr key={wine.id} className={`hover:bg-gray-50 transition-colors ${wine.isSoldOut ? 'bg-red-50/30' : ''}`}>
-                            {/* Her er ændringen sat ind: */}
+                            
                             <td className="px-6 py-4 max-w-[250px] whitespace-normal">
                                 <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
                                 <div className="text-gray-600">
@@ -82,7 +82,7 @@ export default function WineTable({
                                     type="text" 
                                     defaultValue={wine.wineCabinet} 
                                     placeholder="Skab"
-                                    onBlur={(e) => onUpdateLocation && onUpdateLocation(wine, e.target.value)} 
+                                    onBlur={(e) => onUpdateWineCabinet && onUpdateWineCabinet(wine, e.target.value)} 
                                     className="w-24 p-2 border border-gray-200 rounded-lg text-center focus:border-[#991b1b] outline-none" 
                                 />
                             </td>
@@ -94,7 +94,7 @@ export default function WineTable({
                                     type="text" 
                                     defaultValue={wine.shelf}
                                     placeholder="Hylde" 
-                                    onBlur={(e) => onUpdateshelf && onUpdateshelf(wine, e.target.value)} 
+                                    onBlur={(e) => onUpdateShelf && onUpdateShelf(wine, e.target.value)} 
                                     className="w-20 p-2 border border-gray-200 rounded-lg text-center focus:border-[#991b1b] outline-none" 
                                 />
                             </td>
