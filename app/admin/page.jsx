@@ -113,7 +113,7 @@ export default function AdminVinkort() {
       if(w.classification) s.classifications.add(w.classification);
       if(w.region) s.regions.add(w.region);
       if(w.country) s.countries.add(w.country);
-      if(w.wineCabinet) s.locations.add(w.wineCabinet); 
+      if(w.wineCabinet) s.locations.add(String(w.wineCabinet)); // Tvinger det til at blive læst som tekst
     });
     return { 
         producers: Array.from(s.producers).sort(), 
@@ -130,10 +130,10 @@ export default function AdminVinkort() {
       if (adminSearch) {
           const lower = adminSearch.toLowerCase();
           const terms = lower.split(/\s+/).filter(Boolean);
-          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku, w.wineCabinet, w.shelf].join(' ').toLowerCase().includes(t)));
+          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku, String(w.wineCabinet || ''), String(w.shelf || '')].join(' ').toLowerCase().includes(t)));
       }
       if (adminTypeFilter !== 'all') res = res.filter(w => w.type === adminTypeFilter);
-      if (adminLocationFilter !== 'all') res = res.filter(w => w.wineCabinet === adminLocationFilter); 
+      if (adminLocationFilter !== 'all') res = res.filter(w => String(w.wineCabinet || '') === adminLocationFilter); // Tvinger sammenligning som tekst
       if (adminCountryFilter !== 'all') res = res.filter(w => w.country === adminCountryFilter);
       
       res.sort((a, b) => {
@@ -247,13 +247,13 @@ export default function AdminVinkort() {
 
   const updateWineCabinet = async (wine, val) => { 
       const newLoc = val.trim();
-      if ((wine.wineCabinet || '') === newLoc) return;
+      if (String(wine.wineCabinet || '') === newLoc) return;
       await updateDoc(doc(db, 'wines', wine.id), { wineCabinet: newLoc, updatedAt: new Date().toISOString() }); 
   };
 
   const updateShelf = async (wine, val) => { 
       const newShelf = val.trim();
-      if ((wine.shelf || '') === newShelf) return;
+      if (String(wine.shelf || '') === newShelf) return;
       await updateDoc(doc(db, 'wines', wine.id), { shelf: newShelf, updatedAt: new Date().toISOString() }); 
   };
 
