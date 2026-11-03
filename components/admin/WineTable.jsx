@@ -51,9 +51,13 @@ export default function WineTable({
                                 <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
                                 <div className="text-gray-600">
                                     {wine.name}
-                                    {wine.classification && (
+                                    {/* Klassifikation & Årgang er samlet her */}
+                                    {(wine.classification || wine.year) && (
                                         <span className="italic text-gray-400">
-                                            {wine.name ? ` — ${wine.classification}` : wine.classification}
+                                            {wine.name ? ' — ' : ''}
+                                            {wine.classification}
+                                            {wine.classification && wine.year ? ', ' : ''}
+                                            {wine.year}
                                         </span>
                                     )}
                                 </div>
