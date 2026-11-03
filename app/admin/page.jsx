@@ -11,16 +11,14 @@ import WineFormModal from '@/components/admin/WineFormModal';
 import WineTable from '@/components/admin/WineTable';
 import FilterManager from '@/components/admin/FilterManager';
 import ArchiveTab from '@/components/admin/ArchiveTab';
-import HistoryTab from '@/components/admin/HistoryTab'; // NY
-import SyncTab from '@/components/admin/SyncTab'; // NY
-import FeedbackTab from '@/components/admin/FeedbackTab'; // NY
+import HistoryTab from '@/components/admin/HistoryTab'; 
+import SyncTab from '@/components/admin/SyncTab'; 
+import FeedbackTab from '@/components/admin/FeedbackTab'; 
 
 // --- ICONS ---
 const Search = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
 const X = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
 const LogOut = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
-const Printer = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>;
-const Download = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
 const Plus = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
 const Check = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 6 9 17l-5-5"/></svg>;
 const Settings = ({size=20, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1-1-1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
@@ -53,6 +51,10 @@ export default function AdminVinkort() {
   const [adminSort, setAdminSort] = useState('producer_asc');
   const [adminSearch, setAdminSearch] = useState('');
   const [adminTypeFilter, setAdminTypeFilter] = useState('all');
+  
+  const [adminLocationFilter, setAdminLocationFilter] = useState('all'); 
+  const [adminCountryFilter, setAdminCountryFilter] = useState('all'); 
+  
   const [showSoldOut, setShowSoldOut] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -103,15 +105,23 @@ export default function AdminVinkort() {
     return () => { unsubConfig(); unsubWines(); unsubFeedback(); unsubSync(); unsubHistory(); };
   }, [user]);
 
+  // Finder alle unikke lokationer (wineCabinet) og lande
   const adminSuggestions = useMemo(() => {
-    const s = { producers: new Set(), classifications: new Set(), regions: new Set(), countries: new Set() };
+    const s = { producers: new Set(), classifications: new Set(), regions: new Set(), countries: new Set(), locations: new Set() };
     wines.forEach(w => {
       if(w.producer) s.producers.add(w.producer);
       if(w.classification) s.classifications.add(w.classification);
       if(w.region) s.regions.add(w.region);
       if(w.country) s.countries.add(w.country);
+      if(w.wineCabinet) s.locations.add(w.wineCabinet); // Henter wineCabinet til vores dropdown
     });
-    return { producers: Array.from(s.producers).sort(), classifications: Array.from(s.classifications).sort(), regions: Array.from(s.regions).sort(), countries: Array.from(s.countries).sort() };
+    return { 
+        producers: Array.from(s.producers).sort(), 
+        classifications: Array.from(s.classifications).sort(), 
+        regions: Array.from(s.regions).sort(), 
+        countries: Array.from(s.countries).sort(),
+        locations: Array.from(s.locations).sort()
+    };
   }, [wines]);
 
   const adminWines = useMemo(() => {
@@ -120,9 +130,11 @@ export default function AdminVinkort() {
       if (adminSearch) {
           const lower = adminSearch.toLowerCase();
           const terms = lower.split(/\s+/).filter(Boolean);
-          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku].join(' ').toLowerCase().includes(t)));
+          res = res.filter(w => terms.every(t => [w.producer, w.name, w.classification, w.description, w.grapes, w.type, w.sku, w.wineCabinet].join(' ').toLowerCase().includes(t)));
       }
       if (adminTypeFilter !== 'all') res = res.filter(w => w.type === adminTypeFilter);
+      if (adminLocationFilter !== 'all') res = res.filter(w => w.wineCabinet === adminLocationFilter); // Filtrerer på wineCabinet
+      if (adminCountryFilter !== 'all') res = res.filter(w => w.country === adminCountryFilter);
       
       res.sort((a, b) => {
           let comparison = 0;
@@ -139,7 +151,7 @@ export default function AdminVinkort() {
           return comparison || a.id.localeCompare(b.id);
       });
       return res;
-  }, [wines, adminSearch, adminTypeFilter, adminSort, showSoldOut]);
+  }, [wines, adminSearch, adminTypeFilter, adminLocationFilter, adminCountryFilter, adminSort, showSoldOut]);
 
   const archivedWinesList = useMemo(() => {
       return [...wines].filter(w => w.isArchived).sort((a, b) => (a.producer || '').localeCompare(b.producer || ''));
@@ -233,6 +245,19 @@ export default function AdminVinkort() {
       await updateDoc(doc(db, 'wines', wine.id), { sku: newSku, updatedAt: new Date().toISOString() }); 
   };
 
+  // NYE FUNKTIONER TIL WINE CABNIET OG SHELF
+  const updateLocation = async (wine, val) => { 
+      const newLoc = val.trim();
+      if ((wine.wineCabinet || '') === newLoc) return;
+      await updateDoc(doc(db, 'wines', wine.id), { wineCabinet: newLoc, updatedAt: new Date().toISOString() }); 
+  };
+
+  const updateshelf = async (wine, val) => { 
+      const newshelf = val.trim();
+      if ((wine.shelf || '') === newShelf) return;
+      await updateDoc(doc(db, 'wines', wine.id), { shelf: newshelf, updatedAt: new Date().toISOString() }); 
+  };
+
   const handleStockAdjustment = async (e) => {
       e.preventDefault();
       const amount = parseFloat(e.target.amount.value);
@@ -252,22 +277,6 @@ export default function AdminVinkort() {
       } catch (error) {
           setAlertDialog({ message: "Kunne ikke opdatere lageret." });
       }
-  };
-
-  const exportCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,PLU/SKU;Producent;Navn;År;Salgspris;Indkøbspris;Antal\n";
-    adminWines.forEach(w => { csvContent += `"${w.sku || ''}";"${w.producer}";"${w.name}";"${w.year}";${w.price};${w.purchasePrice};${w.stockCount}\n`; });
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "lager_eksport.csv");
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  const printMenu = () => { 
-    const printWindow = window.open('', '_blank');
-    const activeWines = wines.filter(w => !w.isSoldOut && !w.isArchived);
-    let html = `<html><head><title>Vinkort</title><style>body{font-family:sans-serif;}</style></head><body><h1 style="text-align:center;">Vinkort - Carlton</h1>`;
-    activeWines.forEach(w => html += `<div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid #ccc;"><div style="padding-right:1rem;"><p style="font-weight:bold;margin:0;">${w.producer}</p><p style="margin:2px 0;">${w.name || ''}</p><p style="font-size:0.8em;color:#666;margin:0;">${w.year}</p></div><div style="text-align:right;"><p style="font-weight:600;margin:0;">${w.price},-</p></div></div>`);
-    html += `</body></html>`;
-    printWindow.document.write(html); printWindow.document.close(); setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
   };
 
   if (authChecking) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin h-8 w-8 border-4 border-[#991b1b] border-t-transparent rounded-full"></div></div>;
@@ -317,7 +326,6 @@ export default function AdminVinkort() {
               <button onClick={() => setAdminTab('feedback')} className={`px-4 py-3 font-bold whitespace-nowrap transition-colors flex items-center gap-2 border-b-2 ${adminTab === 'feedback' ? 'text-[#991b1b] border-[#991b1b]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}><MessageSquare size={18}/> Feedback</button>
           </div>
 
-          {/* VORES NYE BYGGEKLODS KALD 🪄 */}
           {adminTab === 'archived' && <ArchiveTab wines={archivedWinesList} onRestore={restoreWine} onDelete={deleteWine} />}
           {adminTab === 'history' && <HistoryTab historyLogs={historyLogs} />}
           {adminTab === 'sync' && <SyncTab syncLogs={syncLogs} />}
@@ -345,18 +353,34 @@ export default function AdminVinkort() {
                           <p className="text-gray-500 mt-1">{adminWines.filter(w=>!w.isSoldOut).length} aktive varer</p>
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                          <div className="relative w-full sm:w-64">
+                      <div className="flex flex-wrap lg:flex-nowrap gap-3 w-full lg:w-auto">
+                          <div className="relative w-full lg:w-64">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                             <input type="text" placeholder="Søg..." value={adminSearch} onChange={e => setAdminSearch(e.target.value)} className="pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl w-full outline-none focus:border-[#991b1b]" />
                           </div>
-                          <select value={adminSort} onChange={e => setAdminSort(e.target.value)} className="p-3 bg-gray-50 border border-gray-200 rounded-xl w-full sm:w-auto outline-none focus:border-[#991b1b]">
+                          
+                          <select value={adminLocationFilter} onChange={e => setAdminLocationFilter(e.target.value)} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex-1 outline-none focus:border-[#991b1b]">
+                              <option value="all">Alle Vinskabe</option>
+                              {adminSuggestions.locations.map(loc => (
+                                  <option key={loc} value={loc}>{loc}</option>
+                              ))}
+                          </select>
+
+                          <select value={adminCountryFilter} onChange={e => setAdminCountryFilter(e.target.value)} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex-1 outline-none focus:border-[#991b1b]">
+                              <option value="all">Alle Lande</option>
+                              {adminSuggestions.countries.map(country => (
+                                  <option key={country} value={country}>{country}</option>
+                              ))}
+                          </select>
+
+                          <select value={adminSort} onChange={e => setAdminSort(e.target.value)} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex-1 outline-none focus:border-[#991b1b]">
                               <option value="producer_asc">Sorter: Producent (A-Å)</option>
                               <option value="name_asc">Sorter: Navn (A-Å)</option>
                               <option value="stock_asc">Sorter: Lager (Lavest)</option>
                               <option value="sku_asc">Sorter: PLU-nummer</option>
                           </select>
-                          <button onClick={() => setShowSoldOut(!showSoldOut)} className={`px-4 py-3 text-sm font-bold rounded-xl border transition-colors ${showSoldOut ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+
+                          <button onClick={() => setShowSoldOut(!showSoldOut)} className={`px-4 py-3 text-sm font-bold rounded-xl border transition-colors whitespace-nowrap ${showSoldOut ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
                             {showSoldOut ? 'Viser Udsolgte' : 'Filtrér Udsolgte'}
                           </button>
                       </div>
@@ -377,6 +401,8 @@ export default function AdminVinkort() {
                   <WineTable 
                       wines={adminWines} 
                       onUpdateSku={updateSku} 
+                      onUpdatewineCabinet={updatewineCabinet} /* TILFØJET LOKATION */
+                      onUpdateshelf={updateshelf}       /* TILFØJET HYLDE */
                       onUpdatePrice={updatePrice} 
                       onUpdatePurchasePrice={updatePurchasePrice} 
                       onUpdateStock={updateStock} 

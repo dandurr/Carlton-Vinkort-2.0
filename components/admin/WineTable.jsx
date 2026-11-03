@@ -11,7 +11,9 @@ const Plus = ({size=16, className=""}) => <svg width={size} height={size} viewBo
 
 export default function WineTable({ 
     wines, 
-    onUpdateSku, 
+    onUpdateSku,
+    onUpdateLocation,
+    onUpdateShelf,
     onUpdatePrice, 
     onUpdatePurchasePrice, 
     onUpdateStock, 
@@ -32,6 +34,8 @@ export default function WineTable({
                         <th className="px-6 py-4 font-bold uppercase">Producent & Vin</th>
                         <th className="px-4 py-4 font-bold uppercase">Type</th>
                         <th className="px-4 py-4 font-bold uppercase text-center">PLU</th>
+                        <th className="px-4 py-4 font-bold uppercase text-center">Vinskab</th>
+                        <th className="px-4 py-4 font-bold uppercase text-center">Hylde</th>
                         <th className="px-4 py-4 font-bold uppercase text-right">Salgspris</th>
                         <th className="px-4 py-4 font-bold uppercase text-right">Købspris</th>
                         <th className="px-4 py-4 font-bold uppercase text-right">Lager</th>
@@ -46,7 +50,6 @@ export default function WineTable({
                                 <div className="font-bold text-gray-900 text-base">{wine.producer}</div>
                                 <div className="text-gray-600">
                                     {wine.name}
-                                    {/* AOC / Klassifikation tilføjes her */}
                                     {wine.classification && (
                                         <span className="italic text-gray-400">
                                             {wine.name ? ` — ${wine.classification}` : wine.classification}
@@ -66,17 +69,42 @@ export default function WineTable({
                                     key={`sku-${wine.id}-${wine.sku}`}
                                     type="text" 
                                     defaultValue={wine.sku} 
-                                    onBlur={(e) => onUpdateSku(wine, e.target.value)} 
+                                    onBlur={(e) => onUpdateSku && onUpdateSku(wine, e.target.value)} 
                                     className="w-20 p-2 border border-gray-200 rounded-lg text-center font-mono focus:border-[#991b1b] outline-none" 
                                 />
                             </td>
+                            
+                            {/* VINSKAB FELTET */}
+                            <td className="px-4 py-4 text-center">
+                                <input 
+                                    key={`loc-${wine.id}-${wine.wineCabinet}`}
+                                    type="text" 
+                                    defaultValue={wine.wineCabinet} 
+                                    placeholder="Skab"
+                                    onBlur={(e) => onUpdateLocation && onUpdateLocation(wine, e.target.value)} 
+                                    className="w-24 p-2 border border-gray-200 rounded-lg text-center focus:border-[#991b1b] outline-none" 
+                                />
+                            </td>
+                            
+                            {/* HYLDE FELTET */}
+                            <td className="px-4 py-4 text-center">
+                                <input 
+                                    key={`shelf-${wine.id}-${wine.Shelf}`}
+                                    type="text" 
+                                    defaultValue={wine.Shelf}
+                                    placeholder="Hylde" 
+                                    onBlur={(e) => onUpdateShelf && onUpdateShelf(wine, e.target.value)} 
+                                    className="w-20 p-2 border border-gray-200 rounded-lg text-center focus:border-[#991b1b] outline-none" 
+                                />
+                            </td>
+
                             <td className="px-4 py-4 text-right">
                                 <input 
                                     key={`price-${wine.id}-${wine.price}`}
                                     type="number" 
                                     step="any" 
                                     defaultValue={wine.price} 
-                                    onBlur={(e) => onUpdatePrice(wine, e.target.value)} 
+                                    onBlur={(e) => onUpdatePrice && onUpdatePrice(wine, e.target.value)} 
                                     className="w-24 p-2 border border-gray-200 rounded-lg text-right font-bold text-gray-900 focus:border-[#991b1b] outline-none" 
                                 />
                             </td>
@@ -86,7 +114,7 @@ export default function WineTable({
                                     type="number" 
                                     step="any" 
                                     defaultValue={wine.purchasePrice} 
-                                    onBlur={(e) => onUpdatePurchasePrice(wine, e.target.value)} 
+                                    onBlur={(e) => onUpdatePurchasePrice && onUpdatePurchasePrice(wine, e.target.value)} 
                                     className="w-24 p-2 border border-gray-200 rounded-lg text-right focus:border-[#991b1b] outline-none" 
                                 />
                             </td>
@@ -97,7 +125,7 @@ export default function WineTable({
                                         type="number" 
                                         step="any" 
                                         defaultValue={wine.stockCount} 
-                                        onBlur={(e) => onUpdateStock(wine, e.target.value)} 
+                                        onBlur={(e) => onUpdateStock && onUpdateStock(wine, e.target.value)} 
                                         className={`w-16 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : 'border-gray-200'}`} 
                                     />
                                     <button 
