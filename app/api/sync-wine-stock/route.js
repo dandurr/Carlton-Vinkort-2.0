@@ -59,11 +59,15 @@ export async function GET(req) {
         method: 'POST',
         headers: nemposHeaders,
         body: JSON.stringify({
-          admin_index_request: 1,
           sort_by: [{ parameter: "created_at", direction: "desc" }]
         })
       });
       const ordersData = await ordersRes.json();
+      
+      if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) {
+          console.log(`Ingen ordrer fundet på side ${page}. Svar fra NemPOS:`, JSON.stringify(ordersData).slice(0, 300));
+          break; 
+      }
       
 
       if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) {
