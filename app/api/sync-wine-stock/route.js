@@ -55,10 +55,16 @@ export async function GET(req) {
       console.log(`Henter side ${page} fra NemPOS...`);
       
       const listUrl = `https://api.nempos.dk/api/v1/orders/filtered?company_uuid=${process.env.NEMPOS_COMPANY_UUID}&page=${page}`;
-      const ordersRes = await fetch(listUrl, { method: 'POST', headers: nemposHeaders, body: JSON.stringify({}) });
+      const ordersRes = await fetch(listUrl, {
+        method: 'POST',
+        headers: nemposHeaders,
+        body: JSON.stringify({
+          admin_index_request: 1,
+          sort_by: [{ parameter: "created_at", direction: "desc" }]
+        })
+      });
       const ordersData = await ordersRes.json();
-      console.log(`Antal ordrer på side ${page}:`, ordersData?.orders?.length);
-console.log('Første ordre fra NemPOS:', JSON.stringify(ordersData?.orders?.[0]));
+      
 
       if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) {
           console.log(`Ingen ordrer fundet på side ${page}.`);
