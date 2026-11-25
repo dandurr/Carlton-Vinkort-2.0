@@ -304,7 +304,7 @@ function PhysicalCellarMap({ targetCabinet, targetShelf }) {
                 <h3 className="text-center text-gray-400 font-bold mb-2 uppercase tracking-widest text-xs">Rum 1</h3>
                 
                 <div className="flex-1 grid grid-cols-4 grid-rows-5 gap-2 relative h-full">
-                    <div className="col-start-1 row-start-1"><Cabinet num={4} targetCabinet={targetCabinet} targetShelf={targetCabinet} /></div>
+                    <div className="col-start-1 row-start-1"><Cabinet num={4} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
                     <div className="col-start-2 row-start-1"><Cabinet num={5} targetCabinet={targetCabinet} targetShelf={targetShelf} /></div>
 
                     <div className="col-start-3 row-start-1 flex items-start pt-1 justify-center text-gray-400 text-xs font-bold">Dør</div>
