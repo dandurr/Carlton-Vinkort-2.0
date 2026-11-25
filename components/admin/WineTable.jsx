@@ -129,7 +129,7 @@ export default function WineTable({
                                         key={`stock-${wine.id}-${wine.stockCount}`}
                                         type="number" 
                                         step="any" 
-                                        defaultValue={wine.stockCount} 
+                                        defaultValue={wine.stockCount !== undefined ? Math.round(wine.stockCount * 10) / 10 : 0} 
                                         onBlur={(e) => onUpdateStock && onUpdateStock(wine, e.target.value)} 
                                         className={`w-16 p-2 border rounded-lg text-right font-bold focus:border-[#991b1b] outline-none ${wine.stockCount <= 3 ? 'text-red-600 border-red-200 bg-red-50' : 'border-gray-200'}`} 
                                     />

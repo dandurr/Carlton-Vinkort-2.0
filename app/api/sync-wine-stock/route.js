@@ -135,7 +135,7 @@ export async function GET(req) {
                 const firebaseId = wineDoc.id;
                 
                 const currentStock = parseFloat(wineDoc.data().stockCount) || 0;
-                const newStock = currentStock - deductionAmount;
+                const newStock = Math.round((currentStock - deductionAmount) * 10) / 10;
 
                 await setDoc(doc(dbLite, 'wines', firebaseId), { 
                   stockCount: newStock,

@@ -263,7 +263,7 @@ export default function AdminVinkort() {
       if (!amount || isNaN(amount)) return setStockAdjustWine(null);
 
       const currentStock = parseFloat(stockAdjustWine.stockCount) || 0;
-      const newStock = currentStock + amount;
+      const newStock = Math.round((currentStock + amount) * 10) / 10;
 
       try {
           await updateDoc(doc(db, 'wines', stockAdjustWine.id), { 
